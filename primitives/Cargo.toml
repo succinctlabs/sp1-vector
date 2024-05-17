@@ -4,7 +4,7 @@ name = "sp1-vectorx-primitives"
 edition = "2021"
 
 [dependencies]
-sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git", rev = "v1.0.0-testnet" }
+serde = { version = "1", features = ["derive"] }
 dotenv = "0.15.0"
 avail-subxt = { git = "https://github.com/availproject/avail.git", tag = "v2.0.0.0-rc4" }
 subxt = "0.34"
