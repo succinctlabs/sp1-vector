@@ -3,7 +3,9 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
+use blake2::{Blake2b512, Digest};
 use ed25519_consensus::{Signature, VerificationKey};
+use sha2::{Digest as Sha256Digest, Sha256};
 
 pub fn main() {
     // NOTE: values of n larger than 186 will overflow the u128 type,
@@ -16,9 +18,30 @@ pub fn main() {
     let vk: VerificationKey = VerificationKey::try_from(pk.as_ref() as &[u8]).unwrap();
     let sig = Signature::try_from(sig.as_ref()).unwrap();
 
+    // 24M cycles for verification for 300 signatures. Only need to verify once
     println!("cycle-tracker-start: setup");
-    vk.verify(&sig, msg.as_ref()).unwrap();
-    println!("cycle-tracker-end: verify");
+    for _ in 0..300 {
+        vk.verify(&sig, msg.as_ref()).unwrap();
+    }
+    println!("cycle-tracker-end: setup");
 
-    sp1_zkvm::io::commit_slice(&[0u8; 32]);
+    // Double size of msg.
+    let msg = msg.repeat(1000);
+
+    // 1.7M cycles for 32K bytes with Blake2b512.
+    // 1.7M * 512 ~ 870M cycles
+    println!("cycle-tracker-start: blake2b");
+    let mut hasher = Blake2b512::new();
+    hasher.update(msg.clone());
+    let result = hasher.finalize();
+    println!("cycle-tracker-end: blake2b");
+
+    /// 200K cycles for 32K bytes with Sha256.
+    println!("cycle-tracker-start: sha256");
+    let mut hasher = Sha256::new();
+    hasher.update(msg.clone());
+    let result = hasher.finalize();
+    println!("cycle-tracker-end: sha256");
+
+    // sp1_zkvm::io::commit_slice(&result);
 }
