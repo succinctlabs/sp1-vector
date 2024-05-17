@@ -3,20 +3,17 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
+use ed25519_consensus::{Signature, VerificationKey};
+
 pub fn main() {
     // NOTE: values of n larger than 186 will overflow the u128 type,
     // resulting in output that doesn't match fibonacci sequence.
     // However, the resulting proof will still be valid!
-    let n = sp1_zkvm::io::read::<u32>();
-    let mut a: u128 = 0;
-    let mut b: u128 = 1;
-    let mut sum: u128;
-    for _ in 1..n {
-        sum = a + b;
-        a = b;
-        b = sum;
-    }
+    let pk = sp1_zkvm::io::read_vec();
+    let sig = sp1_zkvm::io::read_vec();
 
-    sp1_zkvm::io::commit(&a);
-    sp1_zkvm::io::commit(&b);
+    let vk: VerificationKey = VerificationKey::try_from(pk.as_ref() as &[u8]).unwrap();
+    let sig = Signature::try_from(sig.as_ref()).unwrap();
+
+    vk.verify(&sig, &[0u8; 32]).unwrap();
 }
