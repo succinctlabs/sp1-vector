@@ -4,11 +4,12 @@ use std::env;
 
 use ed25519_consensus::{Signature, SigningKey, VerificationKey, VerificationKeyBytes};
 use rand::thread_rng;
-use sp1_sdk::{ProverClient, SP1Stdin};
+use sp1_sdk::{utils::setup_logger, ProverClient, SP1Stdin};
 
 const ELF: &[u8] = include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
 
 fn main() {
+    setup_logger();
     // Generate proof.
     let mut stdin = SP1Stdin::new();
     let sk = SigningKey::new(thread_rng());
@@ -22,10 +23,12 @@ fn main() {
 
     stdin.write_vec(pk_array.to_vec());
     stdin.write_vec(sig_array.to_vec());
+    stdin.write_vec(msg.to_vec());
 
     env::set_var("SP1_PROVER", "mock");
     let client = ProverClient::new();
     let (pk, vk) = client.setup(ELF);
+    env::set_var("SP1_PROVER", "mock");
     let mut proof = client.prove(&pk, stdin).expect("proving failed");
 
     // Verify proof.

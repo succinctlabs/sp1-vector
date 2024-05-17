@@ -11,9 +11,14 @@ pub fn main() {
     // However, the resulting proof will still be valid!
     let pk = sp1_zkvm::io::read_vec();
     let sig = sp1_zkvm::io::read_vec();
+    let msg = sp1_zkvm::io::read_vec();
 
     let vk: VerificationKey = VerificationKey::try_from(pk.as_ref() as &[u8]).unwrap();
     let sig = Signature::try_from(sig.as_ref()).unwrap();
 
-    vk.verify(&sig, &[0u8; 32]).unwrap();
+    println!("cycle-tracker-start: setup");
+    vk.verify(&sig, msg.as_ref()).unwrap();
+    println!("cycle-tracker-end: verify");
+
+    sp1_zkvm::io::commit_slice(&[0u8; 32]);
 }
