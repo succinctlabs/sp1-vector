@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
+use subxt::backend::rpc::RpcSubscription;
 
 use alloy_sol_types::{sol, SolType};
 use anyhow::anyhow;
@@ -14,17 +15,13 @@ use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use ethers::types::H256;
 use futures::future::join_all;
-use itertools::Itertools;
-use log::{debug, info};
 use sha2::{Digest, Sha256};
-use sp_core::{ed25519, H160};
+use sp_core::{ed25519, Pair};
 
-use crate::consts::{
-    CONSENSUS_ENGINE_ID_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH,
-};
+use crate::consts::{PUBKEY_LENGTH, VALIDATOR_LENGTH};
 use crate::types::{
     CircuitJustification, EncodedFinalityProof, FinalityProof, GrandpaJustification,
-    HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
+    HeaderRotateData, SignerMessage,
 };
 
 /// This function is useful for verifying that a Ed25519 signature is valid, it will panic if the signature is not valid
@@ -98,7 +95,7 @@ impl RpcDataFetcher {
     // This function returns the last block justified by target_authority_set_id. This block
     // also specifies the new authority set, which starts justifying after this block.
     // Returns 0 if curr_authority_set_id <= target_authority_set_id.
-    pub async fn last_justified_block(&mut self, target_authority_set_id: u64) -> u32 {
+    pub async fn last_justified_block(&self, target_authority_set_id: u64) -> u32 {
         let mut low = 0;
         let head_block = self.get_head().await;
         let mut high = head_block.number;
@@ -171,7 +168,7 @@ impl RpcDataFetcher {
     /// Get the state root commitment and data root commitment for the range [start_block + 1, end_block].
     /// Returns a tuple of the state root commitment and data root commitment.
     pub async fn get_merkle_root_commitments(
-        &mut self,
+        &self,
         header_range_commitment_tree_size: u32,
         start_block: u32,
         end_block: u32,
@@ -209,7 +206,7 @@ impl RpcDataFetcher {
 
     // This function returns a vector of headers for a given range of block numbers, inclusive of the start and end block numbers.
     pub async fn get_block_headers_range(
-        &mut self,
+        &self,
         start_block_number: u32,
         end_block_number: u32,
     ) -> Vec<Header> {
@@ -249,7 +246,7 @@ impl RpcDataFetcher {
         header_result.unwrap().unwrap()
     }
 
-    pub async fn get_head(&mut self) -> Header {
+    pub async fn get_head(&self) -> Header {
         let head_block_hash = self
             .client
             .legacy_rpc()
@@ -264,7 +261,7 @@ impl RpcDataFetcher {
         header.unwrap().unwrap()
     }
 
-    pub async fn get_authority_set_id(&mut self, block_number: u32) -> u64 {
+    pub async fn get_authority_set_id(&self, block_number: u32) -> u64 {
         let block_hash = self.get_block_hash(block_number).await;
 
         let set_id_key = api::storage().grandpa().current_set_id();
@@ -279,7 +276,7 @@ impl RpcDataFetcher {
 
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
-    pub async fn get_authorities(&mut self, block_number: u32) -> Vec<[u8; 32]> {
+    pub async fn get_authorities(&self, block_number: u32) -> Vec<[u8; 32]> {
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities = self
@@ -306,7 +303,7 @@ impl RpcDataFetcher {
 
     // Computes the authority_set_hash for a given block number. Note: This is the authority set hash
     // that validates the next block after the given block number.
-    pub async fn compute_authority_set_hash(&mut self, block_number: u32) -> H256 {
+    pub async fn compute_authority_set_hash(&self, block_number: u32) -> H256 {
         let authorities = self.get_authorities(block_number).await;
 
         let mut hash_so_far = Vec::new();
@@ -319,20 +316,115 @@ impl RpcDataFetcher {
         H256::from_slice(&hash_so_far)
     }
 
-    async fn get_justification_data(
-        &mut self,
+    async fn compute_data_from_justification(
+        &self,
+        justification: GrandpaJustification,
         block_number: u32,
-    ) -> Result<SimpleJustificationData> {
+    ) -> Result<CircuitJustification> {
+        let authority_set_id = self.get_authority_set_id(block_number).await;
+
+        // Form a message which is signed in the justification.
+        let signed_message = Encode::encode(&(
+            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
+            &justification.round,
+            &authority_set_id,
+        ));
+
+        // List of valid pubkeys to signatures from the justification.
+        let mut pubkey_to_signature = HashMap::new();
+        for precommit in justification.commit.precommits {
+            let is_ok = <ed25519::Pair as Pair>::verify(
+                &precommit.clone().signature,
+                signed_message.as_slice(),
+                &precommit.clone().id,
+            );
+            if is_ok {
+                pubkey_to_signature.insert(precommit.clone().id.0, precommit.clone().signature.0);
+            }
+        }
+
+        // Get the authority set for the block number.
+        let authorities = self.get_authorities(block_number).await;
+        let num_authorities = authorities.len();
+        let current_authority_set_hash = compute_authority_set_hash(&authorities);
+
+        let mut signatures = Vec::new();
+        for authority in authorities.clone() {
+            let signature = pubkey_to_signature.get(&authority);
+            if signature.is_none() {
+                signatures.push(None);
+            } else {
+                signatures.push(Some(*signature.unwrap()));
+            }
+        }
+
+        // Total votes is the total number of entries in pubkey_to_signature.
+        let total_votes = pubkey_to_signature.len();
+
+        if total_votes * 3 < num_authorities * 2 {
+            panic!("Not enough voting power");
+        }
+
+        Ok(CircuitJustification {
+            signed_message,
+            authority_set_id,
+            current_authority_set_hash,
+            pubkeys: authorities.clone(),
+            signatures,
+            num_authorities,
+        })
+    }
+
+    /// Get the latest justification data. Because Avail does not store the justification data for
+    /// all blocks, we can only generate a proof using the latest justification data or the justification data for a specific block.
+    async fn get_latest_justification_data(&self) -> Result<CircuitJustification> {
+        let sub: Result<RpcSubscription<GrandpaJustification>, _> = self
+            .client
+            .rpc()
+            .subscribe(
+                "grandpa_subscribeJustifications",
+                RpcParams::new(),
+                "grandpa_unsubscribeJustifications",
+            )
+            .await;
+        let mut sub = sub.unwrap();
+
+        // Wait for new justification.
+        if let Some(Ok(justification)) = sub.next().await {
+            // Get the header corresponding to the new justification.
+            let header = self
+                .client
+                .legacy_rpc()
+                .chain_get_header(Some(justification.commit.target_hash))
+                .await
+                .unwrap()
+                .unwrap();
+            let block_number = header.number;
+            return self
+                .compute_data_from_justification(justification, block_number)
+                .await;
+        }
+        Err(anyhow!("Missing attribute"))
+    }
+
+    /// Get the justification data for the given epoch end block.
+    /// Fetch the authority set and justification proof for block_number. If the finality proof is a
+    /// simple justification, return a CircuitJustification with the encoded precommit that all
+    /// authorities sign, the validator signatures, and the authority set's pubkeys.
+    async fn get_justification_data_epoch_end(
+        &self,
+        epoch_end_block: u32,
+    ) -> Result<CircuitJustification> {
         // Note: grandpa_proveFinality will serve the proof for the last justified block in an epoch.
         // get_simple_justification should fail for any block that is not the last justified block
         // in an epoch.
-        let curr_authority_set_id = self.get_authority_set_id(block_number).await;
-        let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
+        let curr_authority_set_id = self.get_authority_set_id(epoch_end_block).await;
+        let prev_authority_set_id = self.get_authority_set_id(epoch_end_block - 1).await;
 
         // If epoch end block, use grandpa_proveFinality to get the justification.
         if curr_authority_set_id == prev_authority_set_id + 1 {
             let mut params = RpcParams::new();
-            let _ = params.push(block_number);
+            let _ = params.push(epoch_end_block);
 
             let encoded_finality_proof = self
                 .client
@@ -346,87 +438,11 @@ impl RpcDataFetcher {
             let justification: GrandpaJustification =
                 Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
 
-            // The authority set id for the current block is defined in the previous block.
-            let authority_set_id = self.get_authority_set_id(block_number - 1).await;
-
-            // The authorities for the current block are defined in the previous block.
-            let authorities_pubkey_bytes = self.get_authorities(block_number - 1).await;
-
-            // Form a message which is signed in the justification.
-            // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/primitives/consensus/grandpa/src/lib.rs#L434-L458
-            let signed_message = Encode::encode(&(
-                &SignerMessage::PrecommitMessage(
-                    justification.commit.precommits[0].clone().precommit,
-                ),
-                &justification.round,
-                &authority_set_id,
-            ));
-
-            let mut pubkey_bytes_to_signature = HashMap::new();
-
-            // Verify all the signatures of the justification.
-            justification
-                .commit
-                .precommits
-                .iter()
-                .for_each(|precommit| {
-                    let pubkey = precommit.clone().id;
-                    let signature = precommit.clone().signature.0;
-                    let pubkey_bytes = pubkey.0;
-
-                    // Verify the signature by this validator over the signed_message which is shared.
-                    verify_signature(&pubkey_bytes, &signed_message, &signature);
-                    pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
-                });
-
-            let mut signatures = Vec::new();
-            let mut pubkeys = Vec::new();
-            let mut voting_weight = 0;
-            for pubkey_bytes in authorities_pubkey_bytes.iter() {
-                pubkeys.push(*pubkey_bytes);
-                if let Some(valid_signature) = pubkey_bytes_to_signature.get(pubkey_bytes) {
-                    signatures.push(Some(*valid_signature));
-                    voting_weight += 1;
-                } else {
-                    signatures.push(None);
-                }
-            }
-
-            return Ok(SimpleJustificationData {
-                pubkeys,
-                signatures,
-                signed_message,
-                voting_weight,
-                num_authorities: authorities_pubkey_bytes.len() as u64,
-            });
+            return self
+                .compute_data_from_justification(justification, epoch_end_block)
+                .await;
         }
         Err(anyhow!("Missing attribute"))
-    }
-
-    // Fetch the authority set and justification proof for block_number. If the finality proof is a
-    // simple justification, return a CircuitJustification with the encoded precommit that all
-    // authorities sign, the validator signatures, and the authority set's pubkeys.
-    pub async fn get_justification_from_block(
-        &mut self,
-        block_number: u32,
-    ) -> Result<CircuitJustification> {
-        let data = self.get_justification_data(block_number).await?;
-
-        let current_authority_set_id = self.get_authority_set_id(block_number - 1).await;
-        let current_authority_set_hash = compute_authority_set_hash(&data.pubkeys);
-
-        if data.voting_weight * 3 < data.num_authorities * 2 {
-            panic!("Not enough voting power");
-        }
-
-        Ok(CircuitJustification {
-            authority_set_id: current_authority_set_id,
-            signed_message: data.signed_message,
-            pubkeys: data.pubkeys,
-            signatures: data.signatures,
-            num_authorities: data.num_authorities as usize,
-            current_authority_set_hash,
-        })
     }
 
     /// This function takes in a block_number as input, and fetches the new authority set specified
@@ -437,7 +453,7 @@ impl RpcDataFetcher {
         const HEADER_LENGTH: usize,
         const VALIDATOR_SET_SIZE_MAX: usize,
     >(
-        &mut self,
+        &self,
         epoch_end_block: u32,
     ) -> HeaderRotateData {
         // Assert epoch_end_block is a valid epoch end block.
@@ -623,9 +639,8 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_justification_from_block() {
         let mut fetcher = RpcDataFetcher::new().await;
-        let head = fetcher.get_head().await;
 
-        let justification = fetcher.get_justification_from_block(head.number).await;
+        let justification = fetcher.get_latest_justification_data().await;
         println!("justification {:?}", justification);
     }
 
@@ -646,7 +661,7 @@ mod tests {
         println!("authority_set_hash {:?}", hex::encode(authority_set_hash.0));
         println!("header_hash {:?}", hex::encode(header_hash.0));
 
-        let _ = fetcher.get_justification_from_block(block).await;
+        let _ = fetcher.get_justification_data_epoch_end(block).await;
     }
 
     #[tokio::test]
