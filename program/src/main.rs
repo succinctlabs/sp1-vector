@@ -36,7 +36,7 @@ pub fn main() {
     let result = hasher.finalize();
     println!("cycle-tracker-end: blake2b");
 
-    /// 200K cycles for 32K bytes with Sha256.
+    // 200K cycles for 32K bytes with Sha256.
     println!("cycle-tracker-start: sha256");
     let mut hasher = Sha256::new();
     hasher.update(msg.clone());

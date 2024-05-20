@@ -19,3 +19,5 @@ pgo-data.profdata
 # Added by cargo
 
 /target
+
+.env
