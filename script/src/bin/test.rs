@@ -6,7 +6,7 @@ use ed25519_consensus::{Signature, SigningKey, VerificationKey, VerificationKeyB
 use rand::{thread_rng, Rng};
 use sp1_sdk::{utils::setup_logger, ProverClient, SP1Stdin};
 
-const ELF: &[u8] = include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
+const ELF: &[u8] = include_bytes!("../../../program/elf/riscv32im-succinct-zkvm-elf");
 
 fn main() {
     setup_logger();
