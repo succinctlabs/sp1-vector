@@ -449,13 +449,7 @@ impl RpcDataFetcher {
     /// in the epoch end block. It returns the data necessary to prove the new authority set, which
     /// specifies the new authority set hash, the number of authorities, and the start and end
     /// position of the encoded new authority set in the header.
-    pub async fn get_header_rotate<
-        const HEADER_LENGTH: usize,
-        const VALIDATOR_SET_SIZE_MAX: usize,
-    >(
-        &self,
-        epoch_end_block: u32,
-    ) -> HeaderRotateData {
+    pub async fn get_header_rotate(&self, epoch_end_block: u32) -> HeaderRotateData {
         // Assert epoch_end_block is a valid epoch end block.
         let epoch_end_block_authority_set_id = self.get_authority_set_id(epoch_end_block).await;
         let prev_authority_set_id = self.get_authority_set_id(epoch_end_block - 1).await;
@@ -463,15 +457,7 @@ impl RpcDataFetcher {
 
         let header = self.get_header(epoch_end_block).await;
 
-        let mut header_bytes = header.encode();
-        let header_size = header_bytes.len();
-        if header_size > HEADER_LENGTH {
-            panic!(
-                "header size {} is greater than HEADER_LENGTH {}",
-                header_size, HEADER_LENGTH
-            );
-        }
-        header_bytes.resize(HEADER_LENGTH, 0);
+        let header_bytes = header.encode();
 
         // Fetch the new authority set specified in the epoch end block.
         let new_authorities = self.get_authorities(epoch_end_block).await;
@@ -546,7 +532,7 @@ mod tests {
     use avail_subxt::config::Header;
 
     use super::*;
-    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
+    use crate::consts::MAX_AUTHORITY_SET_SIZE;
 
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -691,9 +677,7 @@ mod tests {
         assert_eq!(previous_authority_set_id + 1, authority_set_id);
         assert_eq!(previous_authority_set_id, target_authority_set_id);
 
-        let rotate_data = fetcher
-            .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_number)
-            .await;
+        let rotate_data = fetcher.get_header_rotate(epoch_end_block_number).await;
         println!(
             "new authority set hash {:?}",
             rotate_data.new_authority_set_hash
@@ -703,7 +687,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_grandpa_prove_finality() {
-        let mut fetcher = RpcDataFetcher::new().await;
+        let fetcher = RpcDataFetcher::new().await;
 
         let block_number = 642000;
         let authority_set_id = fetcher.get_authority_set_id(block_number - 1).await;
