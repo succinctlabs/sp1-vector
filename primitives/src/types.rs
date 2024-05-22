@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct RotateInput {
+    pub current_authority_set_id: u64,
+    pub current_authority_set_hash: Vec<u8>,
+    pub justification: CircuitJustification,
+    pub header_rotate_data: HeaderRotateData,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct HeaderRotateData {
     pub header_bytes: Vec<u8>,
     pub num_authorities: usize,
@@ -17,6 +25,8 @@ pub struct CircuitJustification {
     pub signatures: Vec<Option<Vec<u8>>>,
     pub num_authorities: usize,
     pub current_authority_set_hash: Vec<u8>,
+    pub block_number: u32,
+    pub block_hash: [u8; 32],
 }
 
 #[derive(Debug, Deserialize, Serialize)]

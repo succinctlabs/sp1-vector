@@ -7,21 +7,23 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::env;
 use subxt::backend::rpc::RpcSubscription;
-
+use ethers::types::H256;
 use sp1_vectorx_primitives::types::{CircuitJustification, HeaderRotateData};
+use sp1_vectorx_primitives::decode_precommit;
 
 use avail_subxt::avail_client::AvailClient;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, RpcParams};
 use codec::{Compact, Decode, Encode};
-use ethers::types::H256;
+
 use futures::future::join_all;
 use sha2::{Digest, Sha256};
 use sp_core::{ed25519, Pair};
 
 use crate::consts::{HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH};
 use crate::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
+
 
 // Compute the chained hash of the authority set.
 pub fn compute_authority_set_hash(authorities: &[[u8; 32]]) -> Vec<u8> {
@@ -33,36 +35,6 @@ pub fn compute_authority_set_hash(authorities: &[[u8; 32]]) -> Vec<u8> {
         hash_so_far = hasher.finalize().to_vec();
     }
     hash_so_far
-}
-
-pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
-    // The first byte should be a 1.
-    assert_eq!(precommit[0], 1);
-
-    // The next 32 bytes are the block hash.
-    let block_hash = &precommit[1..33];
-
-    // The next 4 bytes are the block number.
-    let block_number = &precommit[33..37];
-    // Convert the block number to a u32.
-    let block_number = u32::from_le_bytes(block_number.try_into().unwrap());
-
-    // The next 8 bytes are the justification round.
-    let round = &precommit[37..45];
-    // Convert the round to a u64.
-    let round = u64::from_le_bytes(round.try_into().unwrap());
-
-    // The next 8 bytes are the authority set id.
-    let authority_set_id = &precommit[45..53];
-    // Convert the authority set id to a u64.
-    let authority_set_id = u64::from_le_bytes(authority_set_id.try_into().unwrap());
-
-    (
-        H256::from_slice(block_hash),
-        block_number,
-        round,
-        authority_set_id,
-    )
 }
 
 pub struct RpcDataFetcher {
@@ -347,6 +319,8 @@ impl RpcDataFetcher {
         if total_votes * 3 < num_authorities * 2 {
             panic!("Not enough voting power");
         }
+
+        let block_hash = self.get_block_hash(block_number).await.0;
         CircuitJustification {
             signed_message,
             authority_set_id,
@@ -354,6 +328,8 @@ impl RpcDataFetcher {
             pubkeys: authorities.clone(),
             signatures,
             num_authorities,
+            block_number,
+            block_hash,
         }
     }
 
