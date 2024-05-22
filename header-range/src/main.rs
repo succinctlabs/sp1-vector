@@ -3,22 +3,17 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use blake2::{Blake2b512, Digest};
-
+use blake2::digest::{Update, VariableOutput};
+use blake2::Blake2bVar;
+use sp1_vectorx_primitives::merkle::get_merkle_root_commitments;
 use sp1_vectorx_primitives::{
     decode_scale_compact_int,
     types::{CircuitJustification, DecodedHeaderData, HeaderRangeProofRequestData},
+    verify_simple_justification,
 };
 
 pub fn main() {
     let request_data = sp1_zkvm::io::read::<HeaderRangeProofRequestData>();
-
-    // Commit to the input data.
-    sp1_zkvm::io::commit(&request_data.trusted_block);
-    sp1_zkvm::io::commit(&request_data.trusted_header_hash);
-    sp1_zkvm::io::commit(&request_data.authority_set_id);
-    sp1_zkvm::io::commit(&request_data.authority_set_hash);
-    sp1_zkvm::io::commit(&request_data.target_block);
 
     let mut encoded_headers = Vec::new();
     // Read the encoded headers.
@@ -29,7 +24,6 @@ pub fn main() {
 
     let target_justification = sp1_zkvm::io::read::<CircuitJustification>();
 
-    // TODO
     // 1. Decode the headers using: https://github.com/succinctlabs/vectorx/blob/fb83641259aef1f5df33efa73c23d90973d64e24/circuits/builder/decoder.rs#L104-L157
     // 2. Verify the chain of headers is connected from the trusted block to the target block.
     // 3. Verify the justification is valid.
@@ -44,11 +38,14 @@ pub fn main() {
 
     // Hash the headers.
     let mut header_hashes = Vec::new();
+    const DIGEST_SIZE: usize = 32;
     for header_bytes in encoded_headers {
-        let mut hasher = Blake2b512::new();
-        hasher.update(header_bytes);
-        let res = hasher.finalize();
-        header_hashes.push(res.to_vec());
+        let mut hasher = Blake2bVar::new(DIGEST_SIZE).unwrap();
+        hasher.update(header_bytes.as_slice());
+
+        let mut digest_bytes = [0u8; DIGEST_SIZE];
+        let _ = hasher.finalize_variable(&mut digest_bytes);
+        header_hashes.push(digest_bytes.to_vec());
     }
 
     // Assert the first header hash matches the trusted header hash.
@@ -75,6 +72,27 @@ pub fn main() {
         decoded_headers_data[decoded_headers_data.len() - 1].block_number,
         request_data.target_block
     );
+
+    // Stage 3: Verify the justification is valid.
+    verify_simple_justification(
+        target_justification,
+        request_data.authority_set_id,
+        Vec::from(request_data.authority_set_hash),
+    );
+
+    // Stage 4: Compute the simple Merkle tree commitment (start with fixed size of 512) for the headers.
+    let (state_root_commitment, data_root_commitment) =
+        get_merkle_root_commitments(&decoded_headers_data[1..]);
+
+    // Commit the state root and data root Merkle roots.
+    sp1_zkvm::io::commit_slice(&state_root_commitment);
+    sp1_zkvm::io::commit_slice(&data_root_commitment);
+    // // Commit to the input data.
+    sp1_zkvm::io::commit(&request_data.trusted_block);
+    sp1_zkvm::io::commit(&request_data.trusted_header_hash);
+    sp1_zkvm::io::commit(&request_data.authority_set_id);
+    sp1_zkvm::io::commit(&request_data.authority_set_hash);
+    sp1_zkvm::io::commit(&request_data.target_block);
 }
 
 /// Decode the header into a DecodedHeaderData struct.
