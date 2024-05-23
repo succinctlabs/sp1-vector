@@ -12,22 +12,18 @@ use sp1_vectorx_primitives::{
     verify_simple_justification,
 };
 
+/// Verify the justification from the current authority set on target block and compute the
+/// {state, data}_root_commitments over the range [trusted_block + 1, target_block] inclusive.
 pub fn main() {
     let request_data = sp1_zkvm::io::read::<HeaderRangeProofRequestData>();
 
-    let mut encoded_headers = Vec::new();
-    // Read the encoded headers.
-    for _ in 0..request_data.target_block - request_data.trusted_block + 1 {
-        let header_bytes = sp1_zkvm::io::read_vec();
-        encoded_headers.push(header_bytes);
-    }
-
+    let encoded_headers = request_data.encoded_headers;
     let target_justification = sp1_zkvm::io::read::<CircuitJustification>();
 
     // 1. Decode the headers using: https://github.com/succinctlabs/vectorx/blob/fb83641259aef1f5df33efa73c23d90973d64e24/circuits/builder/decoder.rs#L104-L157
     // 2. Verify the chain of headers is connected from the trusted block to the target block.
     // 3. Verify the justification is valid.
-    // 4. Compute the simple merkle tree commitment (start with fixed size of 512) for the headers.
+    // 4. Compute the simple merkle tree commitment for the headers.
 
     // Stage 1: Decode the headers.
     // Decode the headers.
@@ -80,9 +76,9 @@ pub fn main() {
         Vec::from(request_data.authority_set_hash),
     );
 
-    // Stage 4: Compute the simple Merkle tree commitment (start with fixed size of 512) for the headers.
+    // Stage 4: Compute the simple Merkle tree commitment for the headers.
     let (state_root_commitment, data_root_commitment) =
-        get_merkle_root_commitments(&decoded_headers_data[1..]);
+        get_merkle_root_commitments(&decoded_headers_data[1..], request_data.merkle_tree_size);
 
     // Commit the state root and data root Merkle roots.
     sp1_zkvm::io::commit_slice(&state_root_commitment);

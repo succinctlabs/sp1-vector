@@ -61,6 +61,8 @@ fn verify_encoding_epoch_end_header(
     assert_eq!(header_bytes[cursor..cursor + 4], [0u8, 0u8, 0u8, 0u8]);
 }
 
+/// Verify the justification from the current authority set on the epoch end header and return the new
+/// authority set commitment.
 pub fn main() {
     let rotate_input: RotateInput = sp1_zkvm::io::read::<RotateInput>();
 
@@ -84,7 +86,7 @@ pub fn main() {
     // Verify the encoded epoch end header is formatted correctly, and that the provided new pubkeys match the encoded ones.
     verify_encoding_epoch_end_header(
         &rotate_input.header_rotate_data.header_bytes,
-        rotate_input.header_rotate_data.position as usize,
+        rotate_input.header_rotate_data.consensus_log_position as usize,
         rotate_input.header_rotate_data.num_authorities as u64,
         rotate_input.header_rotate_data.pubkeys.clone(),
     );
