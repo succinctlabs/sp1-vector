@@ -3,6 +3,8 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
+use alloy_primitives::B256;
+use alloy_sol_types::SolValue;
 use blake2::digest::{Update, VariableOutput};
 use blake2::Blake2bVar;
 use sp1_vectorx_primitives::merkle::get_merkle_root_commitments;
@@ -11,6 +13,8 @@ use sp1_vectorx_primitives::{
     types::{CircuitJustification, DecodedHeaderData, HeaderRangeProofRequestData},
     verify_simple_justification,
 };
+mod types;
+use crate::types::HeaderRangeOutputs;
 
 /// Verify the justification from the current authority set on target block and compute the
 /// {state, data}_root_commitments over the range [trusted_block + 1, target_block] inclusive.
@@ -41,7 +45,7 @@ pub fn main() {
 
         let mut digest_bytes = [0u8; DIGEST_SIZE];
         let _ = hasher.finalize_variable(&mut digest_bytes);
-        header_hashes.push(digest_bytes.to_vec());
+        header_hashes.push(B256::from(digest_bytes));
     }
 
     // Assert the first header hash matches the trusted header hash.
@@ -73,36 +77,40 @@ pub fn main() {
     verify_simple_justification(
         target_justification,
         request_data.authority_set_id,
-        Vec::from(request_data.authority_set_hash),
+        request_data.authority_set_hash,
     );
 
     // Stage 4: Compute the simple Merkle tree commitment for the headers.
     let (state_root_commitment, data_root_commitment) =
         get_merkle_root_commitments(&decoded_headers_data[1..], request_data.merkle_tree_size);
 
-    // Commit the state root and data root Merkle roots.
-    sp1_zkvm::io::commit_slice(&state_root_commitment);
-    sp1_zkvm::io::commit_slice(&data_root_commitment);
-    // // Commit to the input data.
-    sp1_zkvm::io::commit(&request_data.trusted_block);
-    sp1_zkvm::io::commit(&request_data.trusted_header_hash);
-    sp1_zkvm::io::commit(&request_data.authority_set_id);
-    sp1_zkvm::io::commit(&request_data.authority_set_hash);
-    sp1_zkvm::io::commit(&request_data.target_block);
+    // Create an instance of the HeaderRangeOutputs struct
+    let outputs = HeaderRangeOutputs {
+        trusted_block: request_data.trusted_block,
+        trusted_header_hash: request_data.trusted_header_hash,
+        authority_set_id: request_data.authority_set_id,
+        authority_set_hash: request_data.authority_set_hash,
+        target_block: request_data.target_block,
+        state_root_commitment,
+        data_root_commitment,
+    };
+
+    // Commit the ABI-encoded HeaderRangeOutputs struct
+    sp1_zkvm::io::commit_slice(&outputs.abi_encode());
 }
 
 /// Decode the header into a DecodedHeaderData struct.
 fn decode_header(header_bytes: Vec<u8>) -> DecodedHeaderData {
-    let parent_hash = header_bytes[..32].to_vec();
+    let parent_hash = B256::from_slice(&header_bytes[..32]);
 
     let mut position = 32;
 
     let (block_nb, num_bytes) = decode_scale_compact_int(&header_bytes[32..37]);
     position += num_bytes;
 
-    let state_root = header_bytes[position..position + 32].to_vec();
+    let state_root = B256::from_slice(&header_bytes[position..position + 32]);
 
-    let data_root = header_bytes[header_bytes.len() - 32..header_bytes.len()].to_vec();
+    let data_root = B256::from_slice(&header_bytes[header_bytes.len() - 32..header_bytes.len()]);
 
     DecodedHeaderData {
         block_number: block_nb as u32,

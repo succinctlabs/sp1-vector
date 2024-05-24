@@ -1,7 +1,8 @@
 use anyhow::Result;
-use ethers::types::H256;
 use sp1_vectorx_primitives::types::{CircuitJustification, HeaderRotateData};
-use sp1_vectorx_primitives::verify_signature;
+use sp1_vectorx_primitives::{
+    compute_authority_set_commitment, verify_encoded_validators, verify_signature, consts::HASH_SIZE
+};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::env;
@@ -14,24 +15,11 @@ use avail_subxt::{api, RpcParams};
 use codec::{Compact, Decode, Encode};
 
 use futures::future::join_all;
-use sha2::{Digest, Sha256};
 use sp_core::ed25519;
-
-use crate::consts::{HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH};
+use ethers::types::H256;
+use alloy_primitives::{B256, B512};
 use crate::redis::RedisClient;
 use crate::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
-
-// Compute the chained hash of the authority set.
-pub fn compute_authority_set_hash_from_authorities(authorities: &[[u8; 32]]) -> Vec<u8> {
-    let mut hash_so_far = Vec::new();
-    for authority in authorities {
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(hash_so_far);
-        hasher.update(authority);
-        hash_so_far = hasher.finalize().to_vec();
-    }
-    hash_so_far
-}
 
 pub struct RpcDataFetcher {
     pub client: AvailClient,
@@ -52,15 +40,6 @@ impl RpcDataFetcher {
             redis,
             avail_chain_id,
         }
-    }
-
-    // TODO: Should be removed when we read header_range_tree_commitment_size from the contract.
-    pub fn get_merkle_tree_size(&self, num_headers: u32) -> usize {
-        let mut size = 1;
-        while size < num_headers {
-            size *= 2;
-        }
-        size.try_into().unwrap()
     }
 
     // This function returns the last block justified by target_authority_set_id. This block
@@ -98,82 +77,14 @@ impl RpcDataFetcher {
         epoch_end_block_number
     }
 
-    pub async fn get_block_hash(&self, block_number: u32) -> H256 {
+    pub async fn get_block_hash(&self, block_number: u32) -> B256 {
         let block_hash = self
             .client
             .legacy_rpc()
             .chain_get_block_hash(Some(block_number.into()))
             .await;
 
-        block_hash.unwrap().unwrap()
-    }
-
-    // Computes the simple Merkle root of the leaves.
-    // If the number of leaves is not a power of 2, the leaves are extended with 0s to the next power of 2.
-    pub fn get_merkle_root(leaves: Vec<Vec<u8>>) -> Vec<u8> {
-        if leaves.is_empty() {
-            return vec![];
-        }
-
-        // Extend leaves to a power of 2.
-        let mut leaves = leaves;
-        while leaves.len().count_ones() != 1 {
-            leaves.push([0u8; 32].to_vec());
-        }
-
-        // In VectorX, the leaves are not hashed.
-        let mut nodes = leaves.clone();
-        while nodes.len() > 1 {
-            nodes = (0..nodes.len() / 2)
-                .map(|i| {
-                    let mut hasher = Sha256::new();
-                    hasher.update(&nodes[2 * i]);
-                    hasher.update(&nodes[2 * i + 1]);
-                    hasher.finalize().to_vec()
-                })
-                .collect();
-        }
-
-        nodes[0].clone()
-    }
-
-    /// Get the state root commitment and data root commitment for the range [start_block + 1, end_block].
-    /// Returns a tuple of the state root commitment and data root commitment.
-    pub async fn get_merkle_root_commitments(
-        &self,
-        header_range_commitment_tree_size: u32,
-        start_block: u32,
-        end_block: u32,
-    ) -> (Vec<u8>, Vec<u8>) {
-        // Assert header_range_commitment_tree_size is a power of 2.
-        assert!(header_range_commitment_tree_size.is_power_of_two());
-
-        if end_block - start_block > header_range_commitment_tree_size {
-            panic!("Range too large!");
-        }
-
-        let headers = self
-            .get_block_headers_range(start_block + 1, end_block)
-            .await;
-
-        let mut data_root_leaves = Vec::new();
-        let mut state_root_leaves = Vec::new();
-        let num_headers = headers.len();
-        for header in headers {
-            data_root_leaves.push(header.data_root().0.to_vec());
-            state_root_leaves.push(header.state_root.0.to_vec());
-        }
-
-        for _ in num_headers..header_range_commitment_tree_size as usize {
-            data_root_leaves.push([0u8; 32].to_vec());
-            state_root_leaves.push([0u8; 32].to_vec());
-        }
-
-        // Uses the simple merkle tree implementation.
-        (
-            Self::get_merkle_root(state_root_leaves),
-            Self::get_merkle_root(data_root_leaves),
-        )
+        B256::from(block_hash.unwrap().unwrap().0)
     }
 
     /// This function returns a vector of headers for a given range of block numbers, inclusive of the start and end block numbers.
@@ -213,7 +124,7 @@ impl RpcDataFetcher {
         let header_result = self
             .client
             .legacy_rpc()
-            .chain_get_header(Some(block_hash))
+            .chain_get_header(Some(H256::from(block_hash.0)))
             .await;
         header_result.unwrap().unwrap()
     }
@@ -239,7 +150,7 @@ impl RpcDataFetcher {
         let set_id_key = api::storage().grandpa().current_set_id();
         self.client
             .storage()
-            .at(block_hash)
+            .at(H256::from(block_hash.0))
             .fetch(&set_id_key)
             .await
             .unwrap()
@@ -249,20 +160,20 @@ impl RpcDataFetcher {
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
     // Note: The authorities returned by this function attest to block_number + 1.
-    pub async fn get_authorities(&self, block_number: u32) -> Vec<[u8; 32]> {
+    pub async fn get_authorities(&self, block_number: u32) -> Vec<B256> {
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities = self
             .client
             .runtime_api()
-            .at(block_hash)
+            .at(H256::from(block_hash.0))
             .call_raw::<Vec<(ed25519::Public, u64)>>("GrandpaApi_grandpa_authorities", None)
             .await
             .unwrap();
 
-        let mut authorities: Vec<[u8; 32]> = Vec::new();
+        let mut authorities: Vec<B256> = Vec::new();
         for (pub_key, weight) in grandpa_authorities {
-            authorities.push(pub_key.0);
+            authorities.push(B256::from(pub_key.0));
             let expected_weight = 1;
             // Assert the LE representation of the weight of each validator is 1.
             assert_eq!(
@@ -276,7 +187,7 @@ impl RpcDataFetcher {
 
     /// Gets the authority set id and authority set hash that are defined in block_number. This authority set
     /// attests to block_number + 1.
-    pub async fn get_authority_set_data_for_block(&self, block_number: u32) -> (u64, H256) {
+    pub async fn get_authority_set_data_for_block(&self, block_number: u32) -> (u64, B256) {
         let authority_set_id = self.get_authority_set_id(block_number).await;
         let authority_set_hash = self
             .compute_authority_set_hash_for_block(block_number)
@@ -286,17 +197,9 @@ impl RpcDataFetcher {
 
     /// Computes the authority_set_hash for a given block number. Note: This is the authority set hash
     /// that validates the next block after the given block number.
-    pub async fn compute_authority_set_hash_for_block(&self, block_number: u32) -> H256 {
+    pub async fn compute_authority_set_hash_for_block(&self, block_number: u32) -> B256 {
         let authorities = self.get_authorities(block_number).await;
-
-        let mut hash_so_far = Vec::new();
-        for authority in authorities {
-            let mut hasher = sha2::Sha256::new();
-            hasher.update(hash_so_far);
-            hasher.update(authority);
-            hash_so_far = hasher.finalize().to_vec();
-        }
-        H256::from_slice(&hash_so_far)
+        compute_authority_set_commitment(&authorities)
     }
 
     /// Get the justification data necessary for the circuit using GrandpaJustification and the block number.
@@ -329,7 +232,7 @@ impl RpcDataFetcher {
 
             pubkey_to_signature.insert(
                 precommit.clone().id.0,
-                precommit.clone().signature.0.to_vec(),
+                B512::from(precommit.clone().signature.0),
             );
         }
 
@@ -339,7 +242,7 @@ impl RpcDataFetcher {
 
         let mut signatures = Vec::new();
         for authority in authorities.clone() {
-            signatures.push(pubkey_to_signature.get(&authority).cloned());
+            signatures.push(pubkey_to_signature.get(&authority.0).cloned());
         }
         // Total votes is the total number of entries in pubkey_to_signature.
         let total_votes = pubkey_to_signature.len();
@@ -347,11 +250,11 @@ impl RpcDataFetcher {
             panic!("Not enough voting power");
         }
 
-        let block_hash = self.get_block_hash(block_number).await.0;
+        let block_hash = self.get_block_hash(block_number).await;
         CircuitJustification {
             signed_message,
             authority_set_id,
-            current_authority_set_hash: authority_set_hash.0.to_vec(),
+            current_authority_set_hash: authority_set_hash,
             pubkeys: authorities.clone(),
             signatures,
             num_authorities,
@@ -386,16 +289,16 @@ impl RpcDataFetcher {
         let header = self.get_header(redis_justification.block_number).await;
 
         // Convert pubkeys from Redis into [u8; 32]
-        let pubkeys: Vec<[u8; 32]> = redis_justification
+        let pubkeys: Vec<B256> = redis_justification
             .pubkeys
             .iter()
-            .map(|pubkey| pubkey.clone().try_into().unwrap())
+            .map(|pubkey| B256::from_slice(pubkey.clone().as_slice()))
             .collect();
 
-        let mut signatures: Vec<Option<Vec<u8>>> = Vec::new();
+        let mut signatures: Vec<Option<B512>> = Vec::new();
         for i in 0..redis_justification.signatures.len() {
             if redis_justification.validator_signed[i] {
-                signatures.push(Some(redis_justification.signatures[i].clone()));
+                signatures.push(Some(B512::from_slice(redis_justification.signatures[i].clone().as_slice())));
             } else {
                 signatures.push(None);
             }
@@ -405,12 +308,12 @@ impl RpcDataFetcher {
         let circuit_justification = CircuitJustification {
             signed_message: redis_justification.signed_message,
             authority_set_id,
-            current_authority_set_hash: authority_set_hash.0.to_vec(),
+            current_authority_set_hash: authority_set_hash,
             pubkeys,
             signatures,
             num_authorities: redis_justification.num_authorities,
             block_number: redis_justification.block_number,
-            block_hash: block_hash.0,
+            block_hash,
         };
         (circuit_justification, header)
     }
@@ -521,29 +424,8 @@ impl RpcDataFetcher {
                     // Follows the encoding format: https://docs.substrate.io/reference/scale-codec/#fn-1
                     // If the number of authorities is <=63, the compact encoding is 1 byte.
                     // If the number of authorities is >63 & < 2^14, the compact encoding is 2 bytes.
-                    let mut cursor = 1 + encoded_num_authorities_len;
-                    let authorities_bytes = &value[cursor..];
-
-                    for (i, authority_chunk) in
-                        authorities_bytes.chunks_exact(VALIDATOR_LENGTH).enumerate()
-                    {
-                        let pubkey = &authority_chunk[..PUBKEY_LENGTH];
-                        let weight = &authority_chunk[PUBKEY_LENGTH..];
-
-                        let expected_weight = &[1u8, 0, 0, 0, 0, 0, 0, 0];
-
-                        // Assert the pubkey in the encoded log is correct.
-                        assert_eq!(*pubkey, new_authorities[i]);
-
-                        // Assert the weight is correct.
-                        assert_eq!(weight, expected_weight);
-
-                        cursor += VALIDATOR_LENGTH;
-                    }
-
-                    // Assert delay is [0, 0, 0, 0]
-                    let delay = &value[cursor..];
-                    assert_eq!(delay[..], [0, 0, 0, 0]);
+                    let cursor = 1 + encoded_num_authorities_len;
+                    verify_encoded_validators(&value, cursor, &new_authorities);
 
                     break;
                 }
@@ -562,7 +444,7 @@ impl RpcDataFetcher {
             );
         }
 
-        let new_authority_set_hash = compute_authority_set_hash_from_authorities(&new_authorities);
+        let new_authority_set_hash = compute_authority_set_commitment(&new_authorities);
 
         HeaderRotateData {
             header_bytes,

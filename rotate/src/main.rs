@@ -3,9 +3,10 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
+use alloy_primitives::B256;
 use sp1_vectorx_primitives::{
     compute_authority_set_commitment, decode_scale_compact_int, types::RotateInput,
-    verify_simple_justification,
+    verify_encoded_validators, verify_simple_justification,
 };
 
 /// Verify the encoded epoch end header is formatted correctly, and that the provided new pubkeys match the encoded ones.
@@ -13,7 +14,7 @@ fn verify_encoding_epoch_end_header(
     header_bytes: &[u8],
     start_cursor: usize,
     num_authorities: u64,
-    pubkeys: Vec<[u8; 32]>,
+    pubkeys: Vec<B256>,
 ) {
     // Verify the epoch end header's consensus log is formatted correctly before the new authority set hash bytes.
     let mut cursor = start_cursor;
@@ -46,19 +47,7 @@ fn verify_encoding_epoch_end_header(
     cursor += decoded_byte_length;
 
     // Verify that num_authorities validators are correctly encoded and match the pubkeys.
-    for pubkey in pubkeys {
-        let extracted_pubkey = header_bytes[cursor..cursor + 32].to_vec();
-        // Assert that the extracted pubkey matches the expected pubkey.
-        assert_eq!(extracted_pubkey, pubkey);
-
-        let extracted_weight = header_bytes[cursor + 32..cursor + 40].to_vec();
-        // All validating voting weights in Avail are 1.
-        assert_eq!(extracted_weight, [1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]);
-
-        cursor += 40;
-    }
-    // Assert the delay is 0.
-    assert_eq!(header_bytes[cursor..cursor + 4], [0u8, 0u8, 0u8, 0u8]);
+    verify_encoded_validators(header_bytes, cursor, &pubkeys);
 }
 
 /// Verify the justification from the current authority set on the epoch end header and return the new
@@ -67,14 +56,8 @@ pub fn main() {
     let rotate_input: RotateInput = sp1_zkvm::io::read::<RotateInput>();
 
     // Compute new authority set hash & convert it from binary to bytes32 for the blockchain
-    let new_authority_set_hash: Vec<u8> = compute_authority_set_commitment(
-        rotate_input.header_rotate_data.num_authorities,
-        rotate_input.header_rotate_data.pubkeys.clone(),
-    );
-    let new_authority_set_hash_bytes32: [u8; 32] = new_authority_set_hash
-        .clone()
-        .try_into()
-        .expect("Failed to convert hash to bytes32");
+    let new_authority_set_hash =
+        compute_authority_set_commitment(&rotate_input.header_rotate_data.pubkeys);
 
     // Verify the provided justification is valid.
     verify_simple_justification(
@@ -91,5 +74,5 @@ pub fn main() {
         rotate_input.header_rotate_data.pubkeys.clone(),
     );
 
-    sp1_zkvm::io::commit_slice(&new_authority_set_hash_bytes32);
+    sp1_zkvm::io::commit(&new_authority_set_hash);
 }

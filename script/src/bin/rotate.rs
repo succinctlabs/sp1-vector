@@ -23,7 +23,7 @@ async fn get_rotate_input(
 
     Ok(RotateInput {
         current_authority_set_id: authority_set_id,
-        current_authority_set_hash: authority_set_hash.0.to_vec(),
+        current_authority_set_hash: authority_set_hash,
         justification,
         header_rotate_data,
     })
@@ -44,7 +44,7 @@ async fn generate_and_verify_proof(authority_set_id: u64) -> anyhow::Result<()> 
 
     // Read outputs.
     let new_authority_set_hash_bytes32 = proof.public_values.read::<[u8; 32]>();
-    let new_authority_set_hash = hex::encode(new_authority_set_hash_bytes32);
+    let _new_authority_set_hash = hex::encode(new_authority_set_hash_bytes32);
 
     // Verify proof.
     client.verify(&proof, &vk)?;
@@ -85,8 +85,7 @@ mod tests {
 
         // Generate next authority set hash.
         let generated_next_authority_set_hash_bytes32 = compute_authority_set_commitment(
-            header_rotate_data.num_authorities,
-            header_rotate_data.pubkeys.clone(),
+            &header_rotate_data.pubkeys,
         );
         let generated_next_authority_set_hash =
             hex::encode(generated_next_authority_set_hash_bytes32);

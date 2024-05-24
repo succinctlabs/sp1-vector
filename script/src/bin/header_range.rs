@@ -1,7 +1,8 @@
 //! A simple script to generate and verify the proof of a given program.
+use alloy_primitives::B256;
 use codec::Encode;
-use crypto::{blake2b::Blake2b, digest::Digest};
 use sp1_sdk::{utils::setup_logger, ProverClient, SP1Stdin};
+use sp1_vectorx_primitives::merkle::get_merkle_tree_size;
 use sp1_vectorx_primitives::types::HeaderRangeProofRequestData;
 use sp1_vectorx_script::input::RpcDataFetcher;
 use subxt::config::Header;
@@ -15,14 +16,14 @@ async fn get_header_range_proof_request_data(
     target_block: u32,
 ) -> HeaderRangeProofRequestData {
     let trusted_header = fetcher.get_header(trusted_block).await;
-    let trusted_header_hash = trusted_header.hash();
+    let trusted_header_hash = B256::from_slice(&trusted_header.hash().0);
     let (authority_set_id, authority_set_hash) = fetcher
         .get_authority_set_data_for_block(trusted_block)
         .await;
 
     let num_headers = target_block - trusted_block + 1;
     // TODO: Should be fetched from the contract when we take this to production.
-    let merkle_tree_size = fetcher.get_merkle_tree_size(num_headers);
+    let merkle_tree_size = get_merkle_tree_size(num_headers);
 
     let headers = fetcher
         .get_block_headers_range(trusted_block, target_block)
@@ -32,8 +33,8 @@ async fn get_header_range_proof_request_data(
     HeaderRangeProofRequestData {
         trusted_block,
         target_block,
-        trusted_header_hash: trusted_header_hash.0,
-        authority_set_hash: authority_set_hash.0,
+        trusted_header_hash,
+        authority_set_hash,
         authority_set_id,
         merkle_tree_size,
         encoded_headers,
@@ -55,13 +56,7 @@ async fn generate_and_verify_proof(trusted_block: u32, target_block: u32) -> any
 
     let client = ProverClient::new();
     let (pk, vk) = client.setup(HEADER_RANGE_ELF);
-    let mut proof = client.prove(&pk, stdin)?;
-
-    // Read outputs.
-    let mut state_root_commitment = [0u8; 32];
-    let mut data_root_commitment = [0u8; 32];
-    proof.public_values.read_slice(&mut state_root_commitment);
-    proof.public_values.read_slice(&mut data_root_commitment);
+    let proof = client.prove(&pk, stdin)?;
 
     // Verify proof.
     client.verify(&proof, &vk)?;
