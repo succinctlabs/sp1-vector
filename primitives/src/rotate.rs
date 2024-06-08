@@ -1,16 +1,35 @@
-//! A simple program to be proven inside the zkVM.
-
-#![no_main]
-sp1_zkvm::entrypoint!(main);
-
 use alloy_primitives::B256;
-use sp1_vectorx_primitives::{
-    compute_authority_set_commitment, decode_scale_compact_int, types::RotateInput,
-    verify_encoded_validators, verify_simple_justification,
-};
+
+use crate::{compute_authority_set_commitment, decode_scale_compact_int, types::RotateInputs, verify_encoded_validators, verify_simple_justification};
+
+/// Verify the justification from the current authority set on the epoch end header and return the new
+/// authority set commitment.
+pub fn verify_rotate(rotate_inputs: RotateInputs) -> B256 {
+    
+    // Compute new authority set hash & convert it from binary to bytes32 for the blockchain
+    let new_authority_set_hash =
+        compute_authority_set_commitment(&rotate_inputs.header_rotate_data.pubkeys);
+
+    // Verify the provided justification is valid.
+    verify_simple_justification(
+        rotate_inputs.justification,
+        rotate_inputs.current_authority_set_id,
+        rotate_inputs.current_authority_set_hash,
+    );
+
+    // Verify the encoded epoch end header is formatted correctly, and that the provided new pubkeys match the encoded ones.
+    verify_encoding_epoch_end_header(
+        &rotate_inputs.header_rotate_data.header_bytes,
+        rotate_inputs.header_rotate_data.consensus_log_position,
+        rotate_inputs.header_rotate_data.num_authorities as u64,
+        rotate_inputs.header_rotate_data.pubkeys.clone(),
+    );
+
+    new_authority_set_hash
+}
 
 /// Verify the encoded epoch end header is formatted correctly, and that the provided new pubkeys match the encoded ones.
-fn verify_encoding_epoch_end_header(
+pub fn verify_encoding_epoch_end_header(
     header_bytes: &[u8],
     start_cursor: usize,
     num_authorities: u64,
@@ -48,31 +67,4 @@ fn verify_encoding_epoch_end_header(
 
     // Verify that num_authorities validators are correctly encoded and match the pubkeys.
     verify_encoded_validators(header_bytes, cursor, &pubkeys);
-}
-
-/// Verify the justification from the current authority set on the epoch end header and return the new
-/// authority set commitment.
-pub fn main() {
-    let rotate_input: RotateInput = sp1_zkvm::io::read::<RotateInput>();
-
-    // Compute new authority set hash & convert it from binary to bytes32 for the blockchain
-    let new_authority_set_hash =
-        compute_authority_set_commitment(&rotate_input.header_rotate_data.pubkeys);
-
-    // Verify the provided justification is valid.
-    verify_simple_justification(
-        rotate_input.justification,
-        rotate_input.current_authority_set_id,
-        rotate_input.current_authority_set_hash,
-    );
-
-    // Verify the encoded epoch end header is formatted correctly, and that the provided new pubkeys match the encoded ones.
-    verify_encoding_epoch_end_header(
-        &rotate_input.header_rotate_data.header_bytes,
-        rotate_input.header_rotate_data.consensus_log_position as usize,
-        rotate_input.header_rotate_data.num_authorities as u64,
-        rotate_input.header_rotate_data.pubkeys.clone(),
-    );
-
-    sp1_zkvm::io::commit(&new_authority_set_hash);
 }
