@@ -74,26 +74,24 @@ impl VectorXOperator {
     ) -> Result<SP1PlonkBn254Proof> {
         let mut stdin: SP1Stdin = SP1Stdin::new();
 
+        let fetcher = RpcDataFetcher::new().await;
+
         let proof_type = ProofType::HeaderRangeProof;
-        let header_range_inputs = self
-            .fetcher
+        let header_range_inputs = fetcher
             .get_header_range_inputs(trusted_block, target_block)
             .await;
 
-        let fetcher = RpcDataFetcher::new().await;
         let curr_authority_set_id = fetcher.get_authority_set_id(target_block - 1).await;
         let target_authority_set_id = fetcher.get_authority_set_id(target_block).await;
 
         let target_justification;
         // This is an epoch end block, fetch using the get_justification_data_for epoch end block
         if curr_authority_set_id == target_authority_set_id - 1 {
-            target_justification = self
-                .fetcher
+            target_justification = fetcher
                 .get_justification_data_epoch_end_block(curr_authority_set_id)
                 .await;
         } else {
-            (target_justification, _) = self
-                .fetcher
+            (target_justification, _) = fetcher
                 .get_justification_data_for_block(target_block)
                 .await
                 .ok_or_else(|| anyhow::anyhow!("Failed to get justification data for block"))?;
@@ -110,13 +108,12 @@ impl VectorXOperator {
         &mut self,
         current_authority_set_id: u64,
     ) -> Result<SP1PlonkBn254Proof> {
+        let fetcher = RpcDataFetcher::new().await;
+
         let mut stdin: SP1Stdin = SP1Stdin::new();
 
         let proof_type = ProofType::RotateProof;
-        let rotate_input = self
-            .fetcher
-            .get_rotate_inputs(current_authority_set_id)
-            .await;
+        let rotate_input = fetcher.get_rotate_inputs(current_authority_set_id).await;
 
         stdin.write(&proof_type);
         stdin.write(&rotate_input);
@@ -133,8 +130,7 @@ impl VectorXOperator {
         let head_authority_set_id = fetcher.get_authority_set_id(head_block - 1).await;
 
         // The current authority set id is the authority set id of the block before the current block.
-        let current_authority_set_id = self
-            .fetcher
+        let current_authority_set_id = fetcher
             .get_authority_set_id(rotate_contract_data.current_block - 1)
             .await;
 
@@ -174,17 +170,15 @@ impl VectorXOperator {
     async fn find_and_request_header_range(&mut self, ideal_block_interval: u32) {
         let header_range_contract_data = self.get_contract_data_for_header_range().await;
 
+        let fetcher = RpcDataFetcher::new().await;
+
         // The current authority set id is the authority set id of the block before the current block.
-        let current_authority_set_id = self
-            .fetcher
+        let current_authority_set_id = fetcher
             .get_authority_set_id(header_range_contract_data.vectorx_latest_block - 1)
             .await;
 
         // Get the last justified block by the current authority set id.
-        let last_justified_block = self
-            .fetcher
-            .last_justified_block(current_authority_set_id)
-            .await;
+        let last_justified_block = fetcher.last_justified_block(current_authority_set_id).await;
 
         // If this is the last justified block, check for header range with next authority set.
         let mut request_authority_set_id = current_authority_set_id;
@@ -279,6 +273,8 @@ impl VectorXOperator {
 
     // Current block, step_range_max and whether next authority set hash exists.
     async fn get_contract_data_for_header_range(&mut self) -> HeaderRangeContractData {
+        let fetcher = RpcDataFetcher::new().await;
+
         let vectorx_latest_block_call_data = VectorX::latestBlockCall {}.abi_encode();
         let vectorx_latest_block = self
             .contract
@@ -300,13 +296,10 @@ impl VectorXOperator {
         let header_range_commitment_tree_size: u32 =
             header_range_commitment_tree_size.try_into().unwrap();
 
-        let fetcher = RpcDataFetcher::new().await;
         let avail_current_block = fetcher.get_head().await.number;
 
-        let vectorx_current_authority_set_id = self
-            .fetcher
-            .get_authority_set_id(vectorx_latest_block - 1)
-            .await;
+        let vectorx_current_authority_set_id =
+            fetcher.get_authority_set_id(vectorx_latest_block - 1).await;
         let next_authority_set_id = vectorx_current_authority_set_id + 1;
 
         let next_authority_set_hash_call_data = VectorX::authoritySetIdToHashCall {
@@ -423,8 +416,7 @@ impl VectorXOperator {
                 return None;
             }
 
-            if self
-                .fetcher
+            if fetcher
                 .get_justification_data_for_block(block_to_step_to)
                 .await
                 .is_some()

@@ -53,7 +53,7 @@ cargo run --bin operator --release
 ## Cycle Count
 
 Header Range
-- ~M cycles. Primarily dominated by Blake2B hashing of the headers in the header range commitment tree.
+- ~230M cycles. Primarily dominated by Blake2B hashing of the headers in the header range commitment tree.
 
 Rotate
 - ~211M cycles.
