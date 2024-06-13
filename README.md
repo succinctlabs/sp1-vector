@@ -13,7 +13,7 @@ Implementation of [Vector X](https://github.com/succinctlabs/vectorx) in Rust fo
 
 ## Demo Contract
 
-An example contract using SP1 Vector
+An example contract using SP1 VectorX can be found on Sepolia [here](https://sepolia.etherscan.io/address/0x745B0a27F125Faa85BBe743f918c3741E2832236).
 
 ## Run the VectorX Light Client
 
@@ -53,7 +53,7 @@ cargo run --bin operator --release
 ## Cycle Count
 
 Header Range
-- ~230M cycles. Primarily dominated by Blake2B hashing of the headers in the header range commitment tree.
+- Primarily dominated by Blake2B hashing of the headers in the header range commitment tree.
 
 Rotate
-- ~211M cycles.
+- ~8M cycles.
