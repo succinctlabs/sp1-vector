@@ -5,7 +5,7 @@ use alloy_primitives::{B256, U256};
 use alloy_sol_types::{sol, SolCall, SolType, SolValue};
 use anyhow::Result;
 use log::{error, info};
-use sp1_sdk::{ProverClient, SP1PlonkBn254Proof, SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
+use sp1_sdk::{ProverClient, SP1PlonkBn254Proof, SP1ProvingKey, SP1Stdin};
 use sp1_vectorx_primitives::types::{HeaderRangeOutputs, ProofOutput, ProofType, RotateOutputs};
 use sp1_vectorx_script::contract::ContractClient;
 use sp1_vectorx_script::input::RpcDataFetcher;
@@ -30,7 +30,6 @@ struct VectorXOperator {
     contract: ContractClient,
     client: ProverClient,
     pk: SP1ProvingKey,
-    vk: SP1VerifyingKey,
 }
 
 #[derive(Debug)]
@@ -53,13 +52,12 @@ impl VectorXOperator {
 
         let contract = ContractClient::default();
         let client = ProverClient::new();
-        let (pk, vk) = client.setup(ELF);
+        let (pk, _) = client.setup(ELF);
 
         Self {
             contract,
             client,
             pk,
-            vk,
         }
     }
 
