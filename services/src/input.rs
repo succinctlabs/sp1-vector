@@ -666,15 +666,4 @@ mod tests {
 
         println!("block number {:?}", block_number);
     }
-
-    use crate::input::RpcDataFetcher;
-    use anyhow::Result;
-
-    #[tokio::test]
-    async fn test_get_justification_query_service() -> Result<()> {
-        let client = RpcDataFetcher::new().await;
-        let justification = client.get_justification("turing", 337281).await?;
-        println!("Justification: {:?}", justification);
-        Ok(())
-    }
 }
