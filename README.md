@@ -9,9 +9,8 @@ Implementation of [Vector X](https://github.com/succinctlabs/vectorx) in Rust fo
 - `/script`: Scripts for getting the contract's genesis parameters and deploying the operator to 
     update the light client.
 - `/services`: RPC fetcher for the `script` + the justification indexer.
-- `/contracts`: The contract's source code and deployment scripts. Backwards-compatible with the
-    original VectorX implementation in case we need to upgrade.
-- `/query`: Contains the logic for querying data root proofs from the contracts.
+- `/contracts`: The contract's source code and deployment scripts. 
+- `/query`: Contains the logic for querying data root proofs from the contracts. Automatically deploys to https://vectorx-query.succinct.xyz.
 
 ## Demo Contract
 
@@ -41,7 +40,7 @@ source .env
 forge script script/VectorX.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_API_KEY --broadcast --verify
 ```
 
-Update `.env` following `.env.example`.
+Update `script/.env` following `script/.env.example`.
 
 Run `VectorX` script to update the LC continuously.
 

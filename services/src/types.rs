@@ -1,9 +1,9 @@
 use avail_subxt::primitives::Header;
 use codec::{Decode, Encode};
-use ethers::types::H256;
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519::{Public as EdPublic, Signature};
+use sp_core::H256;
 use sp_core::{bytes, Bytes};
 
 #[derive(Clone, Debug, Decode, Encode, Deserialize)]
@@ -71,8 +71,8 @@ pub struct FinalityProof {
     pub unknown_headers: Vec<Header>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-/// Stored justification data in Redis.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+/// Stored justification data in DB.
 pub struct StoredJustificationData {
     pub block_number: u32,
     pub signed_message: Vec<u8>,
