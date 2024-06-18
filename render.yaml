@@ -1,7 +1,7 @@
 services:
   - type: worker
     runtime: rust
-    name: sp1-vectorx-test-deploy
+    name: sp1-vectorx-operator
     repo: https://github.com/succinctlabs/sp1-vectorx
     region: oregon
     plan: pro
