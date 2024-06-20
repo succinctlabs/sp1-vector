@@ -1,7 +1,7 @@
 services:
   - type: worker
     runtime: rust
-    name: sp1-vectorx-operator
+    name: sp1-vectorx-operator-eu
     repo: https://github.com/succinctlabs/sp1-vectorx
     region: frankfurt
     plan: pro
