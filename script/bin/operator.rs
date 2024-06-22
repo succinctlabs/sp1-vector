@@ -387,7 +387,7 @@ impl VectorXOperator {
             .commitHeaderRange(proof_as_bytes.into(), proof.public_values.to_vec().into())
             .gas_price(max_fee_per_gas)
             .gas(gas_limit)
-            .nonce(current_nonce + 1)
+            .nonce(current_nonce)
             .send()
             .await?
             .with_required_confirmations(NUM_CONFIRMATIONS)
@@ -427,7 +427,7 @@ impl VectorXOperator {
             .rotate(proof_as_bytes.into(), proof.public_values.to_vec().into())
             .gas_price(max_fee_per_gas)
             .gas(gas_limit)
-            .nonce(current_nonce + 1)
+            .nonce(current_nonce)
             .send()
             .await?
             .with_required_confirmations(NUM_CONFIRMATIONS)
