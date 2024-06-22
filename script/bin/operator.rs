@@ -52,7 +52,8 @@ struct VectorXOperator {
     wallet_filler: Arc<EthereumFillProvider>,
     client: ProverClient,
     pk: SP1ProvingKey,
-    address: Address,
+    contract_address: Address,
+    relayer_address: Address,
     chain_id: u64,
 }
 
@@ -91,6 +92,7 @@ impl VectorXOperator {
             .parse()
             .unwrap();
         let signer: PrivateKeySigner = private_key.parse().expect("Failed to parse private key");
+        let relayer_address = signer.address();
         let wallet = EthereumWallet::from(signer);
         let provider = ProviderBuilder::new()
             .filler(GasFiller)
@@ -103,7 +105,8 @@ impl VectorXOperator {
             pk,
             wallet_filler: Arc::new(provider),
             chain_id,
-            address: contract_address,
+            contract_address,
+            relayer_address,
         }
     }
 
@@ -236,7 +239,7 @@ impl VectorXOperator {
     async fn get_contract_data_for_header_range(&self) -> Result<HeaderRangeContractData> {
         let fetcher = RpcDataFetcher::new().await;
 
-        let contract = VectorX::new(self.address, self.wallet_filler.clone());
+        let contract = VectorX::new(self.contract_address, self.wallet_filler.clone());
 
         let vectorx_latest_block = contract.latestBlock().call().await?.latestBlock;
         let header_range_commitment_tree_size = contract
@@ -267,7 +270,7 @@ impl VectorXOperator {
 
     // Current block and whether next authority set hash exists.
     async fn get_contract_data_for_rotate(&self) -> Result<RotateContractData> {
-        let contract = VectorX::new(self.address, self.wallet_filler.clone());
+        let contract = VectorX::new(self.contract_address, self.wallet_filler.clone());
 
         // Fetch the current block from the contract
         let vectorx_latest_block = contract.latestBlock().call().await?.latestBlock;
@@ -367,7 +370,7 @@ impl VectorXOperator {
 
     /// Relay a header range proof to the SP1 VectorX contract.
     async fn relay_header_range(&self, proof: SP1PlonkBn254Proof) -> Result<()> {
-        let contract = VectorX::new(self.address, self.wallet_filler.clone());
+        let contract = VectorX::new(self.contract_address, self.wallet_filler.clone());
 
         let proof_as_bytes = hex::decode(&proof.proof.encoded_proof)?;
 
@@ -380,7 +383,7 @@ impl VectorXOperator {
 
         let current_nonce = self
             .wallet_filler
-            .get_transaction_count(self.address)
+            .get_transaction_count(self.relayer_address)
             .await?;
 
         let receipt = contract
@@ -407,7 +410,7 @@ impl VectorXOperator {
 
     /// Relay a rotate proof to the SP1 VectorX contract.
     async fn relay_rotate(&self, proof: SP1PlonkBn254Proof) -> Result<()> {
-        let contract = VectorX::new(self.address, self.wallet_filler.clone());
+        let contract = VectorX::new(self.contract_address, self.wallet_filler.clone());
 
         let proof_as_bytes = hex::decode(&proof.proof.encoded_proof)?;
 
@@ -420,7 +423,7 @@ impl VectorXOperator {
 
         let current_nonce = self
             .wallet_filler
-            .get_transaction_count(self.address)
+            .get_transaction_count(self.relayer_address)
             .await?;
 
         let receipt = contract
