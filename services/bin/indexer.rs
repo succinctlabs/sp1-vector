@@ -1,12 +1,49 @@
+use avail_subxt::primitives::Header;
 use avail_subxt::RpcParams;
+use codec::Decode;
 use log::debug;
+use serde::de::Error;
+use serde::Deserialize;
 use services::aws::AWSClient;
 use services::input::RpcDataFetcher;
-use services::types::GrandpaJustification;
+use services::types::{Commit, GrandpaJustification};
+use sp_core::bytes;
 use subxt::backend::rpc::RpcSubscription;
 
+/// The justification type that the Avail Subxt client returns for justifications. Needs a custom
+/// deserializer, so we can't use the equivalent `GrandpaJustification` type.
+#[derive(Clone, Debug, Decode)]
+pub struct AvailSubscriptionGrandpaJustification {
+    pub round: u64,
+    pub commit: Commit,
+    #[allow(dead_code)]
+    pub votes_ancestries: Vec<Header>,
+}
+
+impl From<AvailSubscriptionGrandpaJustification> for GrandpaJustification {
+    fn from(justification: AvailSubscriptionGrandpaJustification) -> GrandpaJustification {
+        GrandpaJustification {
+            round: justification.round,
+            commit: justification.commit,
+            votes_ancestries: justification.votes_ancestries,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for AvailSubscriptionGrandpaJustification {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let encoded = bytes::deserialize(deserializer)?;
+        Self::decode(&mut &encoded[..])
+            .map_err(|codec_err| D::Error::custom(format!("Invalid decoding: {:?}", codec_err)))
+    }
+}
+
 async fn listen_for_justifications(fetcher: RpcDataFetcher, aws_client: AWSClient) {
-    let sub: Result<RpcSubscription<GrandpaJustification>, _> = fetcher
+    println!("Listening for justifications...");
+    let sub: Result<RpcSubscription<AvailSubscriptionGrandpaJustification>, _> = fetcher
         .client
         .rpc()
         .subscribe(
@@ -24,8 +61,9 @@ async fn listen_for_justifications(fetcher: RpcDataFetcher, aws_client: AWSClien
             justification.commit.target_number
         );
 
+        println!("Adding justification to AWS...");
         aws_client
-            .add_justification(&fetcher.avail_chain_id, justification)
+            .add_justification(&fetcher.avail_chain_id, justification.into())
             .await
             .unwrap();
     }

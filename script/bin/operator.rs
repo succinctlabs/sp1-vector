@@ -349,11 +349,12 @@ impl VectorXOperator {
         // to find a valid justification. If we're unable to find a justification, something has gone
         // deeply wrong with the justification indexer.
         loop {
-            if block_to_step_to > vectorx_current_block + header_range_commitment_tree_size {
+            info!("Checking block_to_step_to: {}", block_to_step_to);
+            if block_to_step_to > max_valid_block_to_step_to {
                 error!(
                     "Unable to find any valid justifications after searching from block {} to block {}. This is likely caused by an issue with the justification indexer.",
                     vectorx_current_block + ideal_block_interval,
-                    vectorx_current_block + header_range_commitment_tree_size
+                    max_valid_block_to_step_to
                 );
                 return None;
             }
