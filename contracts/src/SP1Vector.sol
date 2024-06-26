@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.0;
 
 import {IVectorX} from "./interfaces/IVectorX.sol";
 import {TimelockedUpgradeable} from "@succinctx/upgrades/TimelockedUpgradeable.sol";
@@ -320,11 +320,5 @@ contract SP1Vector is IVectorX, TimelockedUpgradeable {
         authoritySetIdToHash[ro.current_authority_set_id + 1] = ro.new_authority_set_hash;
 
         emit AuthoritySetStored(ro.current_authority_set_id + 1, ro.new_authority_set_hash);
-    }
-
-    /// @notice Update the verification key hash if the SP1 program was updated.
-    /// @param _vkey The verification key hash of the new SP1 program.
-    function updateVkeyHash(bytes32 _vkey) external onlyGuardian {
-        vectorXProgramVkey = _vkey;
     }
 }
