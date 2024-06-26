@@ -66,6 +66,26 @@ impl RpcDataFetcher {
         let response = reqwest::get(request_url).await?;
         let json_response = response.json::<serde_json::Value>().await?;
 
+        // If the service does not have a justification associated with the block, return an error.
+        // The response will have the following form:
+        // {
+        //     "success": false
+        //     "error": "No justification found."
+        // }
+        let is_success = json_response.get("success").unwrap().as_bool().unwrap();
+        if !is_success {
+            return Err(anyhow::anyhow!(
+                "No justification found for the specified block number."
+            ));
+        }
+
+        // If the service does have a justification, it should have the following form:
+        // {
+        //     "success": true,
+        //     "justification": {
+        //         "S": "<justification as string>"
+        //     }
+        // }
         let justification_str = json_response
             .get("justification")
             .ok_or_else(|| anyhow::anyhow!("Justification field missing"))
