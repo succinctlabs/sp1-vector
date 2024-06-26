@@ -42,7 +42,6 @@ impl<'de> Deserialize<'de> for AvailSubscriptionGrandpaJustification {
 }
 
 async fn listen_for_justifications(fetcher: RpcDataFetcher, aws_client: AWSClient) {
-    println!("Listening for justifications...");
     let sub: Result<RpcSubscription<AvailSubscriptionGrandpaJustification>, _> = fetcher
         .client
         .rpc()
@@ -61,7 +60,6 @@ async fn listen_for_justifications(fetcher: RpcDataFetcher, aws_client: AWSClien
             justification.commit.target_number
         );
 
-        println!("Adding justification to AWS...");
         aws_client
             .add_justification(&fetcher.avail_chain_id, justification.into())
             .await
