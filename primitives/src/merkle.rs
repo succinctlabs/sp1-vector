@@ -66,11 +66,11 @@ pub fn get_merkle_root_commitments(
     (state_root_commitment, data_root_commitment)
 }
 
-// TODO: Should be removed when we read header_range_tree_commitment_size from the contract.
+/// NOTE: ONLY USED IN TESTING. IN PROD, FETCH FROM CONTRACT.
 pub fn get_merkle_tree_size(num_headers: u32) -> usize {
     let mut size = 1;
     while size < num_headers {
         size *= 2;
     }
-    size.try_into().unwrap()
+    size as usize
 }
