@@ -118,6 +118,10 @@ services:
         value: 0xe542db219a7e2b29c7aeaeace242c9a2cd528f96
       - key: RUST_LOG
         value: info
+      - key: BLOCK_UPDATE_INTERVAL
+        value: 300
+      - key: LOOP_INTERVAL_MINS
+        value: 10
       - key: PRIVATE_KEY
         sync: false
       - key: RPC_URL
@@ -149,6 +153,10 @@ services:
         value: 0xA712dfec48AF3a78419A8FF90fE8f97Ae74680F0
       - key: RUST_LOG
         value: info
+      - key: BLOCK_UPDATE_INTERVAL
+        value: 300
+      - key: LOOP_INTERVAL_MINS
+        value: 10
       - key: PRIVATE_KEY
         sync: false
       - key: RPC_URL
