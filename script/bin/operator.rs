@@ -135,25 +135,8 @@ impl VectorXOperator {
             )
             .await;
 
-        let curr_authority_set_id = fetcher.get_authority_set_id(target_block - 1).await;
-        let target_authority_set_id = fetcher.get_authority_set_id(target_block).await;
-
-        let target_justification;
-        // This is an epoch end block, fetch using the get_justification_data_for epoch end block
-        if curr_authority_set_id == target_authority_set_id - 1 {
-            target_justification = fetcher
-                .get_justification_data_epoch_end_block(curr_authority_set_id)
-                .await;
-        } else {
-            (target_justification, _) = fetcher
-                .get_justification_data_for_block(target_block)
-                .await
-                .ok_or_else(|| anyhow::anyhow!("Failed to get justification data for block"))?;
-        }
-
         stdin.write(&proof_type);
         stdin.write(&header_range_inputs);
-        stdin.write(&target_justification);
 
         info!(
             "Requesting header range proof from block {} to block {}.",
@@ -386,7 +369,14 @@ impl VectorXOperator {
     async fn relay_header_range(&self, proof: SP1PlonkBn254Proof) -> Result<B256> {
         let contract = SP1Vector::new(self.contract_address, self.wallet_filler.clone());
 
-        let proof_as_bytes = hex::decode(&proof.proof.encoded_proof)?;
+        // TODO: sp1_sdk should return empty bytes in mock mode.
+        let proof_as_bytes = if env::var("SP1_PROVER").unwrap().to_lowercase() == "mock" {
+            vec![]
+        } else {
+            let proof_str = proof.bytes();
+            // Strip the 0x prefix from proof_str, if it exists.
+            hex::decode(proof_str.replace("0x", "")).unwrap()
+        };
 
         let gas_limit = relay::get_gas_limit(self.chain_id);
         let max_fee_per_gas = relay::get_fee_cap(self.chain_id, self.wallet_filler.root()).await;
@@ -424,7 +414,14 @@ impl VectorXOperator {
     async fn relay_rotate(&self, proof: SP1PlonkBn254Proof) -> Result<B256> {
         let contract = SP1Vector::new(self.contract_address, self.wallet_filler.clone());
 
-        let proof_as_bytes = hex::decode(&proof.proof.encoded_proof)?;
+        // TODO: sp1_sdk should return empty bytes in mock mode.
+        let proof_as_bytes = if env::var("SP1_PROVER").unwrap().to_lowercase() == "mock" {
+            vec![]
+        } else {
+            let proof_str = proof.bytes();
+            // Strip the 0x prefix from proof_str, if it exists.
+            hex::decode(proof_str.replace("0x", "")).unwrap()
+        };
 
         let gas_limit = relay::get_gas_limit(self.chain_id);
         let max_fee_per_gas = relay::get_fee_cap(self.chain_id, self.wallet_filler.root()).await;
