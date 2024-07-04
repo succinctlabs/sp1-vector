@@ -253,7 +253,7 @@ services:
       - key: CHAIN_ID
         value: 1
       - key: CONTRACT_ADDRESS
-        value: 0x935B595c862446f3f82f8A7D46414641F4F62AD4
+        value: 0x02993cdC11213985b9B13224f3aF289F03bf298d
       - key: RUST_LOG
         value: info
       - key: BLOCK_UPDATE_INTERVAL
