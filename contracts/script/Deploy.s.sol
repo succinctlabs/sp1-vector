@@ -11,8 +11,9 @@ import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
 import {SP1Vector} from "../src/SP1Vector.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
+import {BaseScript} from "./Base.s.sol";
+
 // Required environment variables:
-// - SP1_PROVER
 // - GENESIS_HEIGHT
 // - GENESIS_HEADER
 // - GENESIS_AUTHORITY_SET_ID
@@ -23,47 +24,41 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 // - GUARDIAN_ADDRESS
 // - SP1_VERIFIER_ADDRESS
 
-contract DeployScript is Script {
+contract DeployScript is BaseScript {
     using stdJson for string;
 
+    string internal constant KEY = "SP1_VECTOR";
+
     SP1Vector public sp1Vector;
-    ISP1Verifier public verifier;
 
     function setUp() public {}
 
-    function run() public returns (address) {
+    function run() external multichain(KEY) returns (address sp1VectorAddress) {
         vm.startBroadcast();
 
-        // Read trusted initialization parameters from environment.
-        address guardian;
-        if (vm.envAddress("GUARDIAN_ADDRESS") == address(0)) {
-            guardian = msg.sender;
-        } else {
-            guardian = vm.envAddress("GUARDIAN_ADDRESS");
-        }
-        uint32 height = uint32(vm.envUint("GENESIS_HEIGHT"));
-        bytes32 header = bytes32(vm.envBytes32("GENESIS_HEADER"));
-        uint64 authoritySetId = uint64(vm.envUint("GENESIS_AUTHORITY_SET_ID"));
-        bytes32 authoritySetHash = bytes32(vm.envBytes32("GENESIS_AUTHORITY_SET_HASH"));
+        uint32 genesisHeight = uint32(vm.envUint("GENESIS_HEIGHT"));
+        bytes32 genesisHeader = vm.envBytes32("GENESIS_HEADER");
+        uint64 genesisAuthoritySetId = uint64(vm.envUint("GENESIS_AUTHORITY_SET_ID"));
+        bytes32 genesisAuthoritySetHash = vm.envBytes32("GENESIS_AUTHORITY_SET_HASH");
         uint32 headerRangeCommitmentTreeSize = uint32(vm.envUint("HEADER_RANGE_COMMITMENT_TREE_SIZE"));
-        bytes32 vectorProgramVkey = bytes32(vm.envBytes32("SP1_VECTOR_PROGRAM_VKEY"));
+        bytes32 vectorProgramVkey = vm.envBytes32("SP1_VECTOR_PROGRAM_VKEY");
 
+        // Read trusted initialization parameters from environment.
+        address guardian = vm.envOr("GUARDIAN_ADDRESS", msg.sender);
+
+        ISP1Verifier verifier =
+            ISP1Verifier(vm.envOr("SP1_VERIFIER_ADDRESS", 0x3B6041173B80E77f038f3F2C0f9744f04837185e));
         SP1Vector sp1VectorImpl = new SP1Vector();
-        string memory mockStr = "mock";
-        if (keccak256(abi.encodePacked(vm.envString("SP1_PROVER"))) == keccak256(abi.encodePacked(mockStr))) {
-            verifier = ISP1Verifier(address(new SP1MockVerifier()));
-        } else {
-            verifier = ISP1Verifier(vm.envAddress("SP1_VERIFIER_ADDRESS"));
-        }
-        ERC1967Proxy proxy = new ERC1967Proxy{salt: vm.envBytes32("CREATE2_SALT")}(address(sp1VectorImpl), "");
+        // ERC1967Proxy proxy = new ERC1967Proxy{salt: vm.envBytes32("CREATE2_SALT")}(address(sp1VectorImpl), "");
+        ERC1967Proxy proxy = new ERC1967Proxy(address(sp1VectorImpl), "");
         sp1Vector = SP1Vector(address(proxy));
         sp1Vector.initialize(
             SP1Vector.InitParameters({
                 guardian: guardian,
-                height: height,
-                header: header,
-                authoritySetId: authoritySetId,
-                authoritySetHash: authoritySetHash,
+                height: genesisHeight,
+                header: genesisHeader,
+                authoritySetId: genesisAuthoritySetId,
+                authoritySetHash: genesisAuthoritySetHash,
                 headerRangeCommitmentTreeSize: headerRangeCommitmentTreeSize,
                 vectorProgramVkey: vectorProgramVkey,
                 verifier: address(verifier)
