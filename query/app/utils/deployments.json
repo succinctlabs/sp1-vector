@@ -1,6 +1,16 @@
 {
     "deployments": [
         {
+            "contractChainId": 1,
+            "contractAddress": "0x02993cdC11213985b9B13224f3aF289F03bf298d",
+            "cursorStartBlock": 20235805
+        },
+        {
+            "contractChainId": 84532,
+            "contractAddress": "0x13cBE46E168460a101c07efb6Ab7B9ec637F02aA",
+            "cursorStartBlock": 12169693
+        },
+        {
             "contractChainId": 11155111,
             "contractAddress": "0xe542db219a7e2b29c7aeaeace242c9a2cd528f96",
             "cursorStartBlock": 6204379
