@@ -104,3 +104,6 @@ cd ../script
 AVAIL_URL=wss://turing-rpc.avail.so/ws AVAIL_CHAIN_ID=turing CHAIN_ID=11155111 RPC_URL=https://ethereum-sepolia.publicnode.com/ CONTRACT_ADDRESS=<SP1_VECTOR_ADDRESS> VECTORX_QUERY_URL=https://vectorx-query.succinct.xyz
  cargo run --bin operator --release
 ```
+
+## Testnet Contracts
+You can find a list of actively deployed contracts in this [deployments.json](/query/app/utils/deployments.json).
