@@ -67,7 +67,7 @@ the `SP1Vector` contract.
 
     forge install
 
-    SP1_PROVER={mock, network} forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_API_KEY --broadcast --verify
+    SP1_PROVER={mock, network} CHAINS=sepolia forge script script/Deploy.s.sol --private-key $PRIVATE_KEY --multi --broadcast --verify
     ```
 
     If you see the following error, add `--legacy` to the command.
