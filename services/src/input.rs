@@ -1,5 +1,4 @@
 use anyhow::Result;
-use sp1_vector_primitives::merkle::get_merkle_tree_size;
 use sp1_vector_primitives::types::{
     CircuitJustification, HeaderRangeInputs, HeaderRotateData, Precommit, RotateInputs,
 };
@@ -111,8 +110,6 @@ impl RpcDataFetcher {
         let trusted_header = self.get_header(trusted_block).await;
         let trusted_header_hash: alloy_primitives::FixedBytes<32> =
             B256::from_slice(&trusted_header.hash().0);
-        let (authority_set_id, authority_set_hash) =
-            self.get_authority_set_data_for_block(trusted_block).await;
 
         let num_headers = target_block - trusted_block + 1;
         let merkle_tree_size: usize;
@@ -142,8 +139,6 @@ impl RpcDataFetcher {
             trusted_block,
             target_block,
             trusted_header_hash,
-            authority_set_hash,
-            authority_set_id,
             merkle_tree_size,
             encoded_headers,
             target_justification,
@@ -151,12 +146,6 @@ impl RpcDataFetcher {
     }
 
     pub async fn get_rotate_inputs(&self, authority_set_id: u64) -> RotateInputs {
-        let epoch_end_block = self.last_justified_block(authority_set_id).await;
-
-        let authority_set_hash = self
-            .compute_authority_set_hash_for_block(epoch_end_block - 1)
-            .await;
-
         let justification = self
             .get_justification_data_epoch_end_block(authority_set_id)
             .await;
@@ -164,8 +153,6 @@ impl RpcDataFetcher {
         let header_rotate_data = self.get_header_rotate(authority_set_id).await;
 
         RotateInputs {
-            current_authority_set_id: authority_set_id,
-            current_authority_set_hash: authority_set_hash,
             justification,
             header_rotate_data,
         }
@@ -493,12 +480,9 @@ impl RpcDataFetcher {
             );
         }
 
-        let new_authority_set_hash = compute_authority_set_commitment(&new_authorities);
-
         HeaderRotateData {
             header_bytes,
             num_authorities: new_authorities.len(),
-            new_authority_set_hash,
             pubkeys: new_authorities,
             consensus_log_position: position,
         }
@@ -542,6 +526,15 @@ pub fn convert_justification_and_valset_to_circuit(
     }
 }
 
+/// NOTE: ONLY USED IN TESTING. IN PROD, FETCH FROM CONTRACT.
+fn get_merkle_tree_size(num_headers: u32) -> usize {
+    let mut size = 1;
+    while size < num_headers {
+        size *= 2;
+    }
+    size as usize
+}
+
 #[cfg(test)]
 mod tests {
     use crate::types::{Commit, Precommit, SignerMessage};
@@ -549,7 +542,7 @@ mod tests {
     use avail_subxt::primitives::Header as DaHeader;
     use ed25519::Public;
     use serde::{Deserialize, Serialize};
-    use sp1_vector_primitives::{decode_and_verify_precommit, verify_justification};
+    use sp1_vector_primitives::verify_justification;
     use std::fs::File;
     use test_case::test_case;
 
@@ -607,65 +600,8 @@ mod tests {
         assert_eq!(previous_authority_set_id, target_authority_set_id);
 
         let rotate_data = fetcher.get_header_rotate(new_authority_set_id).await;
-        println!(
-            "new authority set hash {:?}",
-            rotate_data.new_authority_set_hash
-        );
-    }
-
-    #[tokio::test]
-    #[cfg_attr(feature = "ci", ignore)]
-    async fn test_grandpa_prove_finality() {
-        let fetcher = RpcDataFetcher::new().await;
-
-        let block_number = 642000;
-        let authority_set_id = fetcher.get_authority_set_id(block_number - 1).await;
-
-        let last_justified_block = fetcher.last_justified_block(authority_set_id).await;
-
-        let header = fetcher.get_header(last_justified_block).await;
-        println!("header hash {:?}", hex::encode(header.hash().0));
-        let authority_set_hash = fetcher
-            .compute_authority_set_hash_for_block(block_number - 1)
-            .await;
-        println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
-
-        let new_authority_set_id = fetcher.get_authority_set_id(last_justified_block).await;
-
-        println!(
-            "last justified block from authority set {:?} is: {:?}",
-            authority_set_id, last_justified_block
-        );
-
-        println!("new authority set id is: {:?}", new_authority_set_id);
-
-        let mut params = RpcParams::new();
-        let _ = params.push(last_justified_block + 1);
-
-        let encoded_finality_proof = fetcher
-            .client
-            .rpc()
-            .request::<EncodedFinalityProof>("grandpa_proveFinality", params)
-            .await
-            .unwrap();
-
-        let finality_proof: FinalityProof =
-            Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
-        let justification: GrandpaJustification =
-            Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
-
-        let authority_set_id = fetcher.get_authority_set_id(block_number - 1).await;
-
-        // Form a message which is signed in the justification.
-        let signed_message = Encode::encode(&(
-            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
-            &justification.round,
-            &authority_set_id,
-        ));
-
-        let (_, block_number, _, _) = decode_and_verify_precommit(signed_message.clone());
-
-        println!("block number {:?}", block_number);
+        let new_authority_set_hash = compute_authority_set_commitment(&rotate_data.pubkeys);
+        println!("new authority set hash {:?}", new_authority_set_hash);
     }
 
     #[test]
@@ -749,10 +685,6 @@ mod tests {
             validator_set_and_justification.validator_set.set_id,
         );
 
-        verify_justification(
-            circuit_justification.clone(),
-            validator_set_and_justification.validator_set.set_id,
-            circuit_justification.current_authority_set_hash,
-        )
+        verify_justification(&circuit_justification)
     }
 }

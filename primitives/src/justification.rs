@@ -1,8 +1,18 @@
-use crate::{hash_encoded_header, types::CircuitJustification, verify_signature};
+use crate::{hash_encoded_header, types::CircuitJustification};
 use codec::Encode;
+use ed25519_consensus::{Signature, VerificationKey};
 use std::collections::HashMap;
 
 use alloy_primitives::B256;
+
+/// Verify that a Ed25519 signature is valid. Panics if the signature is not valid.
+fn verify_signature(pubkey_bytes: [u8; 32], signed_message: &[u8], signature: [u8; 64]) {
+    let pubkey: VerificationKey = VerificationKey::try_from(pubkey_bytes).unwrap();
+    let verified = pubkey.verify(&Signature::from(signature), signed_message);
+    if verified.is_err() {
+        panic!("Failed to verify Ed25519 signature.");
+    }
+}
 
 /// Confirm ancestry of a child block by traversing the ancestry_map until root_hash is reached.
 /// Sourced from https://github.com/availproject/avail-light/blob/main/core/src/finality.rs with some
@@ -33,20 +43,8 @@ fn is_signed_by_supermajority(num_signatures: usize, validator_set_size: usize) 
 /// of the validator set is achieved on the specific block. Sourced from
 /// https://github.com/availproject/avail-light/blob/main/core/src/finality.rs with some minor
 /// modifications to fit into SP1 Vector, and small refactors for readability.
-pub fn verify_justification(
-    justification: CircuitJustification,
-    authority_set_id: u64,
-    current_authority_set_hash: B256,
-) {
-    // 1. Verify the authority set commitment is valid.
-    assert_eq!(
-        justification.current_authority_set_hash,
-        current_authority_set_hash
-    );
-
-    assert_eq!(justification.authority_set_id, authority_set_id);
-
-    // 2. Form an ancestry map from votes_ancestries in the justification. This maps header hashes to their parents' hashes.
+pub fn verify_justification(justification: &CircuitJustification) {
+    // 1. Form an ancestry map from votes_ancestries in the justification. This maps header hashes to their parents' hashes.
     // Since we only get encoded headers, ensure that the parent is contained in the encoded header, no need to decode it.
     let ancestry_map: HashMap<B256, B256> = justification
         .ancestries_encoded
@@ -60,7 +58,7 @@ pub fn verify_justification(
         })
         .collect();
 
-    // 3. Get the signer addresses of the accounts with valid precommits for the justification.
+    // 2. Get the signer addresses of the accounts with valid precommits for the justification.
     let signer_addresses: Vec<B256> = justification
         .precommits
         .iter()
@@ -90,7 +88,7 @@ pub fn verify_justification(
         })
         .collect();
 
-    // Count the accounts which are in validator set of the justification.
+    // 3. Count the accounts which are in validator set of the justification.
     let num_matched_addresses = signer_addresses
         .iter()
         .filter(|x| justification.valset_pubkeys.iter().any(|e| e.0.eq(&x[..])))
