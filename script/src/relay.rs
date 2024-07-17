@@ -65,6 +65,7 @@ pub struct KMSRelayResponse {
 }
 
 /// Relay a transaction with KMS and return the transaction hash with retries.
+/// Requires SECURE_RELAYER_ENDPOINT and SECURE_RELAYER_API_KEY to be set in the environment.
 pub async fn relay_with_kms(args: &KMSRelayRequest, num_retries: u32) -> Result<B256> {
     let mut num_retries = num_retries;
     while num_retries > 0 {
@@ -78,6 +79,7 @@ pub async fn relay_with_kms(args: &KMSRelayRequest, num_retries: u32) -> Result<
 }
 
 /// Send a KMS relay request and get the response.
+/// Requires SECURE_RELAYER_ENDPOINT and SECURE_RELAYER_API_KEY to be set in the environment.
 async fn send_kms_relay_request(args: &KMSRelayRequest) -> Result<KMSRelayResponse> {
     info!("Sending KMS relay request: {:?}", args);
     // Read relayer endpoint from env
