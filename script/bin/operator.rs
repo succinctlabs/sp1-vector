@@ -17,7 +17,9 @@ use alloy::{
 use anyhow::Result;
 use log::{error, info};
 use services::input::RpcDataFetcher;
-use sp1_sdk::{ProverClient, SP1PlonkBn254Proof, SP1ProvingKey, SP1Stdin};
+use sp1_sdk::{
+    HashableKey, ProverClient, SP1ProofWithPublicValues, SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
+};
 use sp1_vector_primitives::types::ProofType;
 use sp1_vectorx_script::relay::{self};
 const ELF: &[u8] = include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
@@ -53,6 +55,7 @@ struct VectorXOperator {
     provider: Arc<RootProvider<Http<Client>>>,
     client: ProverClient,
     pk: SP1ProvingKey,
+    vk: SP1VerifyingKey,
     contract_address: Address,
     relayer_address: Address,
     chain_id: u64,
@@ -80,7 +83,7 @@ impl VectorXOperator {
         dotenv::dotenv().ok();
 
         let client = ProverClient::new();
-        let (pk, _) = client.setup(ELF);
+        let (pk, vk) = client.setup(ELF);
         let use_kms_relayer: bool = env::var("USE_KMS_RELAYER")
             .unwrap_or("false".to_string())
             .parse()
@@ -111,6 +114,7 @@ impl VectorXOperator {
         Self {
             client,
             pk,
+            vk,
             provider: Arc::new(wallet_filler.root().clone()),
             wallet_filler: Arc::new(wallet_filler),
             chain_id,
@@ -124,7 +128,7 @@ impl VectorXOperator {
         &self,
         trusted_block: u32,
         target_block: u32,
-    ) -> Result<SP1PlonkBn254Proof> {
+    ) -> Result<SP1ProofWithPublicValues> {
         let mut stdin: SP1Stdin = SP1Stdin::new();
 
         let fetcher = RpcDataFetcher::new().await;
@@ -153,10 +157,13 @@ impl VectorXOperator {
             trusted_block, target_block
         );
 
-        self.client.prove_plonk(&self.pk, stdin)
+        self.client.prove(&self.pk, stdin).plonk().run()
     }
 
-    async fn request_rotate(&self, current_authority_set_id: u64) -> Result<SP1PlonkBn254Proof> {
+    async fn request_rotate(
+        &self,
+        current_authority_set_id: u64,
+    ) -> Result<SP1ProofWithPublicValues> {
         let fetcher = RpcDataFetcher::new().await;
 
         let mut stdin: SP1Stdin = SP1Stdin::new();
@@ -172,7 +179,7 @@ impl VectorXOperator {
             current_authority_set_id + 1
         );
 
-        self.client.prove_plonk(&self.pk, stdin)
+        self.client.prove(&self.pk, stdin).plonk().run()
     }
 
     // Determine if a rotate is needed and request the proof if so. Returns Option<current_authority_set_id>.
@@ -387,14 +394,12 @@ impl VectorXOperator {
     }
 
     /// Relay a header range proof to the SP1 SP1Vector contract.
-    async fn relay_header_range(&self, proof: SP1PlonkBn254Proof) -> Result<B256> {
+    async fn relay_header_range(&self, proof: SP1ProofWithPublicValues) -> Result<B256> {
         // TODO: sp1_sdk should return empty bytes in mock mode.
         let proof_as_bytes = if env::var("SP1_PROVER").unwrap().to_lowercase() == "mock" {
             vec![]
         } else {
-            let proof_str = proof.bytes();
-            // Strip the 0x prefix from proof_str, if it exists.
-            hex::decode(proof_str.replace("0x", "")).unwrap()
+            proof.bytes()
         };
 
         if self.use_kms_relayer {
@@ -450,14 +455,12 @@ impl VectorXOperator {
     }
 
     /// Relay a rotate proof to the SP1 SP1Vector contract.
-    async fn relay_rotate(&self, proof: SP1PlonkBn254Proof) -> Result<B256> {
+    async fn relay_rotate(&self, proof: SP1ProofWithPublicValues) -> Result<B256> {
         // TODO: sp1_sdk should return empty bytes in mock mode.
         let proof_as_bytes = if env::var("SP1_PROVER").unwrap().to_lowercase() == "mock" {
             vec![]
         } else {
-            let proof_str = proof.bytes();
-            // Strip the 0x prefix from proof_str, if it exists.
-            hex::decode(proof_str.replace("0x", "")).unwrap()
+            proof.bytes()
         };
 
         if self.use_kms_relayer {
@@ -510,6 +513,27 @@ impl VectorXOperator {
 
             Ok(receipt.transaction_hash)
         }
+    }
+
+    /// Check the verifying key in the contract matches the verifying key in the prover.
+    async fn check_vkey(&self) -> Result<()> {
+        // Check that the verifying key in the contract matches the verifying key in the prover.
+        let contract = SP1Vector::new(self.contract_address, self.provider.clone());
+        let verifying_key = contract
+            .vectorXProgramVkey()
+            .call()
+            .await?
+            .vectorXProgramVkey;
+
+        if verifying_key.0.to_vec()
+            != hex::decode(self.vk.bytes32().strip_prefix("0x").unwrap()).unwrap()
+        {
+            return Err(anyhow::anyhow!(
+                "The verifying key in the operator does not match the verifying key in the contract!"
+            ));
+        }
+
+        Ok(())
     }
 
     async fn run(&self) -> Result<()> {
@@ -599,6 +623,8 @@ async fn main() {
     env_logger::init();
 
     let operator = VectorXOperator::new().await;
+
+    operator.check_vkey().await.unwrap();
 
     loop {
         if let Err(e) = operator.run().await {
