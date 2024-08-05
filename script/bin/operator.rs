@@ -22,7 +22,10 @@ use sp1_sdk::{
 };
 use sp1_vector_primitives::types::ProofType;
 use sp1_vectorx_script::relay::{self};
-const ELF: &[u8] = include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
+use sp1_vectorx_script::SP1_VECTOR_ELF;
+
+// If the SP1 proof takes too long to respond, time out.
+const PROOF_TIMEOUT_SECS: u64 = 60 * 30;
 
 sol! {
     #[allow(missing_docs)]
@@ -83,7 +86,7 @@ impl VectorXOperator {
         dotenv::dotenv().ok();
 
         let client = ProverClient::new();
-        let (pk, vk) = client.setup(ELF);
+        let (pk, vk) = client.setup(SP1_VECTOR_ELF);
         let use_kms_relayer: bool = env::var("USE_KMS_RELAYER")
             .unwrap_or("false".to_string())
             .parse()
@@ -155,7 +158,11 @@ impl VectorXOperator {
             header_range_request.trusted_block, header_range_request.target_block
         );
 
-        self.client.prove(&self.pk, stdin).plonk().run()
+        self.client
+            .prove(&self.pk, stdin)
+            .plonk()
+            .timeout(Duration::from_secs(PROOF_TIMEOUT_SECS))
+            .run()
     }
 
     async fn request_rotate(
@@ -177,7 +184,11 @@ impl VectorXOperator {
             current_authority_set_id + 1
         );
 
-        self.client.prove(&self.pk, stdin).plonk().run()
+        self.client
+            .prove(&self.pk, stdin)
+            .plonk()
+            .timeout(Duration::from_secs(PROOF_TIMEOUT_SECS))
+            .run()
     }
 
     // Determine if a rotate is needed and request the proof if so. Returns Option<current_authority_set_id>.
