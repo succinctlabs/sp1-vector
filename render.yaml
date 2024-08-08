@@ -255,7 +255,7 @@ services:
       - key: AVAIL_URL
         value: wss://turing-rpc.avail.so/ws
       - key: AVAIL_CHAIN_ID
-        value: mainnet
+        value: turing
       - key: RUST_LOG
         value: info
       - key: AWS_ACCESS_KEY_ID
@@ -280,7 +280,7 @@ services:
       - key: AVAIL_URL
         value: wss://rpc-hex-devnet.avail.tools/ws
       - key: AVAIL_CHAIN_ID
-        value: mainnet
+        value: hex
       - key: RUST_LOG
         value: info
       - key: AWS_ACCESS_KEY_ID
