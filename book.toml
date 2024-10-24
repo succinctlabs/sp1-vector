@@ -5,6 +5,9 @@ multilingual = false
 src = "book"
 title = "SP1 Vector Documentation"
 
+[build]
+build-dir = "target/book"
+
 [output.html]
 git-repository-url = "https://github.com/succinctlabs/sp1-vector"
 git-repository-icon = "fa-github"
