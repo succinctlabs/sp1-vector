@@ -1,10 +1,10 @@
 [book]
-authors = ["SP1 Vector Team"]
+authors = ["Ratan Kaliani"]
 language = "en"
 multilingual = false
-src = "src"
+src = "book"
 title = "SP1 Vector Documentation"
 
 [output.html]
-git-repository-url = "https://github.com/yourusername/sp1-vector"
+git-repository-url = "https://github.com/succinctlabs/sp1-vector"
 git-repository-icon = "fa-github"
