@@ -1,6 +1,5 @@
 use anyhow::Result;
 use avail_subxt::primitives::grandpa::{AuthorityId, ConsensusLog};
-use log::info;
 use sp1_vector_primitives::types::{
     CircuitJustification, HeaderRangeInputs, HeaderRotateData, Precommit, RotateInputs,
 };
@@ -521,11 +520,11 @@ impl RpcDataFetcher {
                 if consensus_id == [70, 82, 78, 75] {
                     // Decode the consensus log. Only if this is the correct log, will we continue.
                     match ConsensusLog::<u32>::decode(&mut value.as_slice()) {
-                        Ok(ConsensusLog::ScheduledChange(x)) => {
+                        Ok(ConsensusLog::ScheduledChange(_)) => {
                             println!("Found ScheduledChange log!");
                             found_correct_log = true;
                         }
-                        Ok(ConsensusLog::ForcedChange(_, x)) => {
+                        Ok(ConsensusLog::ForcedChange(_, _)) => {
                             println!("Found ForcedChange log!");
                             found_correct_log = true;
                         }
