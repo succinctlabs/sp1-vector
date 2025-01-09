@@ -6,7 +6,7 @@ When deploying SP1 Vector in production, it's important to ensure that the progr
 
 ## Prerequisites
 
-You first need to install the [cargo prove](https://docs.succinct.xyz/getting-started/install.html#option-1-prebuilt-binaries-recommended) toolchain.
+You first need to install the [cargo prove](https://docs.succinct.xyz/docs/getting-started/install) toolchain.
 
 Ensure that you have the latest version of the toolchain by running:
 
@@ -34,7 +34,7 @@ Then build the binaries:
 cd program
 
 # Builds the SP1 Vector binary using the corresponding Docker tag and ELF name.
-cargo prove build --docker --elf-name vector-elf
+cargo prove build --docker --tag v4.0.0-rc.3 --elf-name vector-elf
 ```
 
 Now, verify the binaries by confirming the output of `vkey` matches the vkeys on the contract. The `vkey` program outputs the verification key
