@@ -590,15 +590,12 @@ pub fn convert_justification_and_valset_to_circuit(
         .iter()
         .map(Encode::encode)
         .collect::<Vec<_>>();
-    let current_authority_set_hash = compute_authority_set_commitment(&validator_set[..]);
 
     CircuitJustification {
         round: justification.round,
         authority_set_id: set_id,
         valset_pubkeys: validator_set.clone(),
         precommits,
-        current_authority_set_hash,
-        block_number: justification.commit.target_number,
         block_hash: justification.commit.target_hash.0.into(),
         ancestries_encoded,
     }
