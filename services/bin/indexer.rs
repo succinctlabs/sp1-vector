@@ -10,6 +10,8 @@ use services::types::{Commit, GrandpaJustification};
 use sp_core::bytes;
 use subxt::backend::rpc::RpcSubscription;
 
+use timeout::Timeout;
+
 /// The justification type that the Avail Subxt client returns for justifications. Needs a custom
 /// deserializer, so we can't use the equivalent `GrandpaJustification` type.
 #[derive(Clone, Debug, Decode)]
@@ -50,7 +52,7 @@ async fn handle_subscription(
     timeout_duration: std::time::Duration,
 ) {
     loop {
-        match tokio::time::timeout(timeout_duration, sub.next()).await {
+        match sub.next().timeout(timeout_duration).await {
             Ok(Some(Ok(justification))) => {
                 debug!(
                     "New justification from block {}",
@@ -104,8 +106,17 @@ async fn listen_for_justifications() {
 
     loop {
         info!("Initializing fetcher and subscription...");
-        let fetcher = RpcDataFetcher::new().await;
-        let aws_client = AWSClient::new().await;
+
+        let Ok(fetcher) = RpcDataFetcher::new().timeout(timeout_duration).await else {
+            error!("Failed to initialize fetcher after timeout");
+            continue;
+        };
+
+        // Initialize the AWS client.
+        let Ok(aws_client) = AWSClient::new().timeout(timeout_duration).await else {
+            error!("Failed to initialize AWS client after timeout");
+            continue;
+        };
 
         match initialize_subscription(&fetcher).await {
             Ok(mut sub) => {
@@ -128,4 +139,20 @@ pub async fn main() {
     env_logger::init();
 
     listen_for_justifications().await;
+}
+
+mod timeout {
+    use std::future::Future;
+    use std::time::Duration;
+    use tokio::time::{timeout, Timeout as TimeoutFuture};
+
+    pub trait Timeout: Sized {
+        fn timeout(self, duration: Duration) -> TimeoutFuture<Self>;
+    }
+
+    impl<T: Future> Timeout for T {
+        fn timeout(self, duration: Duration) -> TimeoutFuture<Self> {
+            timeout(duration, self)
+        }
+    }
 }
