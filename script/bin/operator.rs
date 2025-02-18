@@ -70,7 +70,7 @@ sol! {
 
 type SP1VectorInstance<P, N> = SP1Vector::SP1VectorInstance<(), P, N>;
 
-struct VectorXOperator<P, N> {
+struct SP1VectorOperator<P, N> {
     pk: Arc<SP1ProvingKey>,
     vk: SP1VerifyingKey,
     use_kms_relayer: bool,
@@ -98,7 +98,7 @@ struct RotateContractData {
 // Constructor
 ////////////////////////////////////////////////////////////
 
-impl<P, N> VectorXOperator<P, N>
+impl<P, N> SP1VectorOperator<P, N>
 where
     P: Provider<N>,
     N: Network,
@@ -159,7 +159,7 @@ where
 // Block Utilities
 ////////////////////////////////////////////////////////////
 
-impl<P, N> VectorXOperator<P, N>
+impl<P, N> SP1VectorOperator<P, N>
 where
     P: Provider<N>,
     N: Network,
@@ -381,7 +381,7 @@ where
 // Rotate Utilities
 ////////////////////////////////////////////////////////////
 
-impl<P, N> VectorXOperator<P, N>
+impl<P, N> SP1VectorOperator<P, N>
 where
     P: Provider<N>,
     N: Network,
@@ -484,7 +484,7 @@ where
 // Control Flow & SP1
 ////////////////////////////////////////////////////////////
 
-impl<P, N> VectorXOperator<P, N>
+impl<P, N> SP1VectorOperator<P, N>
 where
     P: Provider<N>,
     N: Network,
@@ -890,10 +890,11 @@ async fn main() {
     }
 
     let config = config::ChainConfig::fetch().expect("Failed to fetch chain config");
+    debug!("config: {:?}", config);
 
     let signer = maybe_signer::MaybeWallet::new(maybe_private_key.map(EthereumWallet::new));
 
-    let mut operator = VectorXOperator::new(use_kms_relayer).await;
+    let mut operator = SP1VectorOperator::new(use_kms_relayer).await;
 
     for c in config {
         let provider = ProviderBuilder::new()
