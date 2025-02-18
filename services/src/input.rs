@@ -22,6 +22,10 @@ use futures::future::join_all;
 use sp_core::ed25519;
 use subxt::config::Header as SubxtHeader;
 
+/// In order to avoid errors from the RPC client, tasks should coordinate via this mutex to coordinate
+/// large amounts of concurrent requests.
+static CONCURRENCY_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// An RPC data fetcher for fetching data for VectorX. The vectorx_query_url is only necessary when
 /// querying justifications.
 pub struct RpcDataFetcher {
@@ -118,6 +122,7 @@ impl RpcDataFetcher {
         let trusted_header = self
             .get_header(header_range_request_data.trusted_block)
             .await;
+
         let trusted_header_hash: alloy::primitives::FixedBytes<32> =
             B256::from_slice(&trusted_header.hash().0);
 
@@ -135,6 +140,12 @@ impl RpcDataFetcher {
             // NOTE: DANGEROUS. ONLY USED IN TESTING. IN PROD, FETCH FROM CONTRACT.
             merkle_tree_size = get_merkle_tree_size(num_headers);
         }
+
+        tracing::debug!(
+            "Getting block headers range from {} to {}",
+            header_range_request_data.trusted_block,
+            header_range_request_data.target_block
+        );
 
         let headers = self
             .get_block_headers_range(
@@ -229,6 +240,10 @@ impl RpcDataFetcher {
         // Fetch the headers in batches of MAX_CONCURRENT_WS_REQUESTS. The WS connection will error if there
         // are too many concurrent requests with Rpc(ClientError(MaxSlotsExceeded)).
         const MAX_CONCURRENT_WS_REQUESTS: usize = 200;
+
+        // Take the guard to coordinate concurrent requests.
+        let _guard = CONCURRENCY_MUTEX.lock().await;
+
         let mut headers = Vec::new();
         let mut curr_block = start_block_number;
         while curr_block <= end_block_number {

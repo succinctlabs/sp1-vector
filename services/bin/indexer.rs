@@ -1,7 +1,6 @@
 use avail_subxt::primitives::Header;
 use avail_subxt::RpcParams;
 use codec::Decode;
-use log::{debug, error, info};
 use serde::de::Error;
 use serde::Deserialize;
 use services::aws::AWSClient;
@@ -9,6 +8,7 @@ use services::input::RpcDataFetcher;
 use services::types::{Commit, GrandpaJustification};
 use sp_core::bytes;
 use subxt::backend::rpc::RpcSubscription;
+use tracing::{debug, error, info};
 
 use sp1_vector_primitives::Timeout;
 

@@ -46,8 +46,8 @@ rand = "0.8.5"
 sp1-build = { workspace = true }
 
 # Logging
-tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [build-dependencies]
 sp1-build = { workspace = true }

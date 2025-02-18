@@ -8184,7 +8184,6 @@ dependencies = [
  "env_logger",
  "futures",
  "hex",
- "log",
  "parity-scale-codec",
  "reqwest 0.11.27",
  "serde",
@@ -8194,6 +8193,7 @@ dependencies = [
  "subxt",
  "test-case",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

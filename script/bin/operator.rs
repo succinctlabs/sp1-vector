@@ -21,7 +21,7 @@ use sp1_sdk::{
     SP1ProvingKey, SP1Stdin, SP1VerifyingKey,
 };
 
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, instrument};
 use tracing_subscriber::EnvFilter;
 
 use sp1_vector_primitives::types::ProofType;
@@ -204,6 +204,7 @@ where
     }
 
     // Ideally, post a header range update every ideal_block_interval blocks. Returns Option<(latest_block, block_to_step_to)>.
+    #[instrument(skip(self, ideal_block_interval))]
     async fn find_header_range(
         &self,
         chain_id: u64,
@@ -457,19 +458,26 @@ where
     }
 
     // Determine if a rotate is needed and request the proof if so. Returns Option<current_authority_set_id>.
+    #[instrument(skip(self))]
     async fn find_rotate(&self, chain_id: u64) -> Result<Option<u64>> {
+        debug!("finding rotate for chain {}", chain_id);
+
         let rotate_contract_data = self.get_contract_data_for_rotate(chain_id).await?;
+        debug!("rotate_contract_data: {:?}", rotate_contract_data);
 
         // Get the current block and authority set id from the Avail chain.
-        let fetcher = RpcDataFetcher::new().await;
-        let head = fetcher.get_head().await;
-        let head_block = head.number;
-        let head_authority_set_id = fetcher.get_authority_set_id(head_block - 1).await;
+        let head_block = self.fetcher.get_head().await.number;
+        debug!("head_block: {}", head_block);
+
+        let head_authority_set_id = self.fetcher.get_authority_set_id(head_block - 1).await;
+        debug!("head_authority_set_id: {}", head_authority_set_id);
 
         // The current authority set id is the authority set id of the block before the current block.
-        let current_authority_set_id = fetcher
+        let current_authority_set_id = self
+            .fetcher
             .get_authority_set_id(rotate_contract_data.current_block - 1)
             .await;
+        debug!("current_authority_set_id: {}", current_authority_set_id);
 
         if current_authority_set_id < head_authority_set_id
             && !rotate_contract_data.next_authority_set_hash_exists
@@ -612,6 +620,8 @@ where
     ///
     /// If any step of this function fails, it will return a generic error indicating a failure.
     async fn handle_rotate(&self) -> Result<()> {
+        debug!("Enter handle rotate");
+
         let next_authority_set_ids = self.contracts.keys().copied().map(|id| async move {
             Result::<_, anyhow::Error>::Ok((id, self.find_rotate(id).await?))
         });
@@ -730,7 +740,10 @@ where
     /// Relay a transaction to a chain.
     ///
     /// NOTE: Assumes the provider has a wallet.
+    #[instrument(skip(self, tx))]
     async fn relay_tx(&self, chain_id: u64, tx: N::TransactionRequest) -> Result<B256> {
+        debug!("Relaying transaction to chain {}", chain_id);
+
         if self.use_kms_relayer {
             relay::relay_with_kms(
                 &relay::KMSRelayRequest {
@@ -768,6 +781,8 @@ where
     /// Check the verifying key in the contract matches the
     /// verifying key in the prover for the given `chain_id`.
     async fn check_vkey(&self, chain_id: u64) -> Result<()> {
+        debug!("Checking verifying key for chain {}", chain_id);
+
         // Check that the verifying key in the contract matches the verifying key in the prover.
         let contract = self
             .contracts
