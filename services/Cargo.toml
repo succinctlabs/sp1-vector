@@ -22,7 +22,7 @@ avail-subxt = { workspace = true }
 subxt = { workspace = true }
 sp-core = { workspace = true }
 codec = { workspace = true }
-alloy-primitives = { workspace = true }
+alloy = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
 

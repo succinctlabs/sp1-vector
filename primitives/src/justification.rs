@@ -3,7 +3,7 @@ use codec::Encode;
 use ed25519_consensus::{Signature, VerificationKey};
 use std::collections::HashMap;
 
-use alloy_primitives::B256;
+use alloy::primitives::B256;
 
 /// Verify that a Ed25519 signature is valid. Panics if the signature is not valid.
 fn verify_signature(pubkey_bytes: [u8; 32], signed_message: &[u8], signature: [u8; 64]) {

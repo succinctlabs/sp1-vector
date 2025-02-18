@@ -10,7 +10,7 @@ use services::types::{Commit, GrandpaJustification};
 use sp_core::bytes;
 use subxt::backend::rpc::RpcSubscription;
 
-use timeout::Timeout;
+use sp1_vector_primitives::Timeout;
 
 /// The justification type that the Avail Subxt client returns for justifications. Needs a custom
 /// deserializer, so we can't use the equivalent `GrandpaJustification` type.
@@ -139,20 +139,4 @@ pub async fn main() {
     env_logger::init();
 
     listen_for_justifications().await;
-}
-
-mod timeout {
-    use std::future::Future;
-    use std::time::Duration;
-    use tokio::time::{timeout, Timeout as TimeoutFuture};
-
-    pub trait Timeout: Sized {
-        fn timeout(self, duration: Duration) -> TimeoutFuture<Self>;
-    }
-
-    impl<T: Future> Timeout for T {
-        fn timeout(self, duration: Duration) -> TimeoutFuture<Self> {
-            timeout(duration, self)
-        }
-    }
 }

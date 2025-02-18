@@ -1,4 +1,4 @@
-use alloy_primitives::B256;
+use alloy::primitives::B256;
 use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,
@@ -120,3 +120,23 @@ mod tests {
         assert_eq!(extracted_hash, hash, "Hashes don't match")
     }
 }
+
+pub use timeout::Timeout;
+
+mod timeout {
+    use std::future::Future;
+    use std::time::Duration;
+    use tokio::time::{timeout, Timeout as TimeoutFuture};
+
+    pub trait Timeout: Sized {
+        fn timeout(self, duration: Duration) -> TimeoutFuture<Self>;
+    }
+
+    impl<T: Future> Timeout for T {
+        fn timeout(self, duration: Duration) -> TimeoutFuture<Self> {
+            timeout(duration, self)
+        }
+    }
+}
+
+mod maybe_signer {}

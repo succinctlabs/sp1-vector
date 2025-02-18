@@ -12,7 +12,7 @@ use std::env;
 use subxt::backend::rpc::RpcSubscription;
 
 use crate::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification};
-use alloy_primitives::{B256, B512};
+use alloy::primitives::{B256, B512};
 use avail_subxt::avail_client::AvailClient;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
@@ -31,7 +31,7 @@ pub struct RpcDataFetcher {
 }
 
 /// Data for the header range request.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HeaderRangeRequestData {
     pub trusted_block: u32,
     pub target_block: u32,
@@ -118,7 +118,7 @@ impl RpcDataFetcher {
         let trusted_header = self
             .get_header(header_range_request_data.trusted_block)
             .await;
-        let trusted_header_hash: alloy_primitives::FixedBytes<32> =
+        let trusted_header_hash: alloy::primitives::FixedBytes<32> =
             B256::from_slice(&trusted_header.hash().0);
 
         let num_headers =

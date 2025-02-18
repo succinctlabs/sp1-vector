@@ -1,5 +1,5 @@
-use alloy_primitives::B256;
-use alloy_sol_types::SolType;
+use alloy::primitives::B256;
+use alloy::sol_types::SolType;
 
 use crate::consts::HEADER_OUTPUTS_LENGTH;
 use crate::merkle::get_merkle_root_commitments;

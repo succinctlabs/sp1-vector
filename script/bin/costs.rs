@@ -1,14 +1,13 @@
+use alloy::consensus::BlockHeader;
 use alloy::eips::BlockId;
 use alloy::network::primitives::HeaderResponse;
 use alloy::rpc::types::{BlockTransactionsKind, Filter};
 use alloy::sol;
 use alloy::sol_types::SolEvent;
 use alloy::{
-    consensus::BlockHeader,
-    network::BlockResponse,
+    network::{BlockResponse, Network},
     primitives::{Address, B256},
-    providers::{Network, Provider, ProviderBuilder},
-    transports::Transport,
+    providers::{Provider, ProviderBuilder},
 };
 use anyhow::Result;
 use chrono::{TimeZone, Utc};
@@ -19,6 +18,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::{env, fs};
+
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug, Clone)]
 #[command(about = "Get transaction costs for an address in a given month")]
@@ -140,7 +141,7 @@ async fn get_receipts_for_chain(
         .map(|receipt| RelayTransaction {
             chain_id,
             tx_hash: receipt.transaction_hash,
-            tx_fee_wei: receipt.gas_used * receipt.effective_gas_price,
+            tx_fee_wei: receipt.gas_used as u128 * receipt.effective_gas_price,
             from: receipt.from,
             to: receipt.to.unwrap_or_default(),
         })
@@ -151,7 +152,11 @@ async fn get_receipts_for_chain(
 async fn main() -> Result<()> {
     env::set_var("RUST_LOG", "info");
     dotenv::dotenv().ok();
-    env_logger::init();
+    tracing_subscriber::fmt::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::from_env("info")),
+        )
+        .init();
 
     let args = CostScriptArgs::parse();
 
@@ -210,13 +215,9 @@ async fn main() -> Result<()> {
 }
 
 /// Finds the block at the provided timestamp, using the provided provider.
-async fn find_block_by_timestamp<P, T, N>(
-    provider: &P,
-    target_timestamp: u64,
-) -> Result<(B256, u64)>
+async fn find_block_by_timestamp<P, N>(provider: &P, target_timestamp: u64) -> Result<(B256, u64)>
 where
-    P: Provider<T, N>,
-    T: Transport + Clone,
+    P: Provider<N>,
     N: Network,
 {
     let latest_block = provider
