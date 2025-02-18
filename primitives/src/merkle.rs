@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 
 use crate::types::DecodedHeaderData;
-use alloy::primitives::B256;
+use alloy_primitives::B256;
 
 // Computes the simple Merkle root of the leaves. If the number of leaves is not a power of 2, pad
 // with empty 32 byte arrays till the next power of 2.

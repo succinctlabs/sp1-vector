@@ -1,5 +1,5 @@
-use alloy::primitives::{B256, B512};
-use alloy::sol;
+use alloy_primitives::{B256, B512};
+use alloy_sol_types::sol;
 
 use serde::{Deserialize, Serialize};
 

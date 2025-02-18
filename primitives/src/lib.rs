@@ -1,4 +1,4 @@
-use alloy::primitives::B256;
+use alloy_primitives::B256;
 use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,

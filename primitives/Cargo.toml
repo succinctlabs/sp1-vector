@@ -8,10 +8,11 @@ serde.workspace = true
 sha2.workspace = true
 ed25519-consensus.workspace = true
 codec.workspace = true
-alloy.workspace = true
 blake2.workspace = true
 itertools.workspace = true
 tokio.workspace = true
+alloy-primitives = "0.8"
+alloy-sol-types = { version = "0.8" }
 
 [dev-dependencies]
 primitive-types = "0.12.2"

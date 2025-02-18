@@ -31,3 +31,6 @@ pgo-data.profdata
 /etc/secrets
 
 **/filtered_transactions/**
+
+!chains.example.json
+chains**.json
