@@ -204,7 +204,8 @@ where
             .skip_simulation(true)
             .plonk()
             .timeout(Duration::from_secs(PROOF_TIMEOUT_SECS))
-            .run()
+            .run_async()
+            .await
     }
 
     // Ideally, post a header range update every ideal_block_interval blocks. Returns Option<(latest_block, block_to_step_to)>.
@@ -458,7 +459,8 @@ where
             .skip_simulation(true)
             .plonk()
             .timeout(Duration::from_secs(PROOF_TIMEOUT_SECS))
-            .run()
+            .run_async()
+            .await
     }
 
     // Determine if a rotate is needed and request the proof if so. Returns Option<current_authority_set_id>.
