@@ -36,6 +36,9 @@ use sp1_vectorx_script::SP1_VECTOR_ELF;
 // If the SP1 proof takes too long to respond, time out.
 const PROOF_TIMEOUT_SECS: u64 = 60 * 30;
 
+// If the operator takes too long to run, time out.
+const LOOP_TIMEOUT_MINS: u64 = 30;
+
 // If the RPC takes too long to respond, time out.
 const RPC_TIMEOUT_SECS: u64 = 60 * 2;
 
@@ -45,6 +48,7 @@ const NUM_CONFIRMATIONS: u64 = 3;
 // If the relay takes too long to respond, time out.
 const RELAY_TIMEOUT_SECONDS: u64 = 60;
 
+// The number of times to retry a relay transaction.
 const NUM_RELAY_RETRIES: u32 = 3;
 
 ////////////////////////////////////////////////////////////
@@ -848,12 +852,18 @@ where
                         tokio::time::sleep(error_interval).await;
                     }
                 },
-                _ = tokio::time::sleep(loop_interval) => {
+                _ = tokio::time::sleep(Duration::from_secs(LOOP_TIMEOUT_MINS * 60)) => {
                     // If this branch is hit, its effectiely a timeout.
                     continue;
                 }
             }
 
+            tracing::info!(
+                "Operator ran successfully, sleeping for {} seconds",
+                loop_interval.as_secs()
+            );
+
+            // Sleep for the loop interval.
             tokio::time::sleep(loop_interval).await;
         }
     }
