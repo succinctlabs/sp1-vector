@@ -750,7 +750,7 @@ where
     async fn relay_tx(&self, chain_id: u64, tx: N::TransactionRequest) -> Result<B256> {
         debug!("Relaying transaction to chain {}", chain_id);
 
-        if matches!(self.signer_mode, SignerMode::KMS) {
+        if matches!(self.signer_mode, SignerMode::Kms) {
             relay::relay_with_kms(
                 &relay::KMSRelayRequest {
                     chain_id,
@@ -999,7 +999,7 @@ mod config {
 
     #[derive(Debug)]
     pub enum SignerMode {
-        KMS,
+        Kms,
         Local,
     }
 
@@ -1008,7 +1008,7 @@ mod config {
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             Ok(match s {
-                "kms" => Self::KMS,
+                "kms" => Self::Kms,
                 "local" => Self::Local,
                 _ => return Err(anyhow::anyhow!("Invalid signer mode: {}", s)),
             })
