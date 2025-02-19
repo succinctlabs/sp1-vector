@@ -593,7 +593,7 @@ where
         // - Creating the rotate proof failed.
         // - Relaying the transaction failed.
         //
-        // In either case we want to log it and indicate the failure to the caller.
+        // In either case log it and indicate the failure to the caller.
         let mut has_errors = false;
         for batch_result in results {
             if let Err(e) = batch_result {
@@ -609,7 +609,7 @@ where
                     } else {
                         has_errors = true;
                         error!(
-                            "Error relaying rotate proof! {:?}",
+                            "Error relaying rotate proof: {:?}",
                             relay_result.unwrap_err()
                         );
                     }
@@ -673,7 +673,7 @@ where
                 );
 
                 // All contract instances will produce the same calldata.
-                // We should have at least one chain id in the vector.
+                // The vector should have non-zero length.
                 let contract = self
                     .contracts
                     .get(&chain_ids[0])
@@ -714,7 +714,7 @@ where
         // - Creating the rotate proof failed.
         // - Relaying the transaction failed.
         //
-        // In either case we want to log it and indicate the failure to the caller.
+        // In either case log it and indicate the failure to the caller.
         let mut has_errors = false;
         for batch_result in results {
             if let Err(e) = batch_result {
@@ -730,7 +730,7 @@ where
                     } else {
                         has_errors = true;
                         error!(
-                            "Error relaying rotate proof! {:?}",
+                            "Error relaying rotate proof: {:?}",
                             relay_result.unwrap_err()
                         );
                     }
@@ -745,7 +745,7 @@ where
         }
     }
 
-    /// Relay a transaction to a chain.
+    /// Relay a transaction to the given chain id.
     ///
     /// NOTE: Assumes the provider has a wallet.
     #[instrument(skip(self, tx))]
