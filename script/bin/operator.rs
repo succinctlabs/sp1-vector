@@ -602,7 +602,7 @@ where
                 for relay_result in batch_result.unwrap() {
                     if let Ok((chain_id, tx_hash)) = relay_result {
                         info!(
-                            "Posted next authority set on chain {}\nTransaction hash: {}",
+                            "Posted next header range on chain {}\nTransaction hash: {}",
                             chain_id, tx_hash
                         );
                     } else {
