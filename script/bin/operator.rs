@@ -570,15 +570,14 @@ where
                         let tx = tx.clone();
 
                         async move {
-                            Result::<_, anyhow::Error>::Ok((
-                                chain_id,
-                                self.relay_tx(chain_id, tx)
-                                    .timeout(Duration::from_secs(RELAY_TIMEOUT_SECONDS))
-                                    .await
-                                    .context(format!(
-                                        "Relaying proof for chain {chain_id} failed"
-                                    ))??,
-                            ))
+                            match self
+                                .relay_tx(chain_id, tx)
+                                .await
+                                .context(format!("Relaying proof for chain {chain_id} failed"))
+                            {
+                                Ok(tx_hash) => Ok((chain_id, tx_hash)),
+                                Err(e) => Err(e),
+                            }
                         }
                     })
                     .collect();
@@ -691,15 +690,14 @@ where
                         let tx = tx.clone();
 
                         async move {
-                            Result::<_, anyhow::Error>::Ok((
-                                chain_id,
-                                self.relay_tx(chain_id, tx)
-                                    .timeout(Duration::from_secs(RELAY_TIMEOUT_SECONDS))
-                                    .await
-                                    .context(format!(
-                                        "Relaying proof for chain {chain_id} failed"
-                                    ))??,
-                            ))
+                            match self
+                                .relay_tx(chain_id, tx)
+                                .await
+                                .context(format!("Relaying proof for chain {chain_id} failed"))
+                            {
+                                Ok(tx_hash) => Ok((chain_id, tx_hash)),
+                                Err(e) => Err(e),
+                            }
                         }
                     })
                     .collect();
