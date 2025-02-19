@@ -9969,7 +9969,6 @@ dependencies = [
  "primitive-types",
  "serde",
  "sha2 0.10.8",
- "tokio",
 ]
 
 [[package]]

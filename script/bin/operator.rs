@@ -24,8 +24,8 @@ use sp1_sdk::{
 use tracing::{debug, error, info, instrument};
 use tracing_subscriber::EnvFilter;
 
+use services::Timeout;
 use sp1_vector_primitives::types::ProofType;
-use sp1_vector_primitives::Timeout;
 use sp1_vectorx_script::relay::{self};
 use sp1_vectorx_script::SP1_VECTOR_ELF;
 

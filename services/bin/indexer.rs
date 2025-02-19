@@ -10,7 +10,7 @@ use sp_core::bytes;
 use subxt::backend::rpc::RpcSubscription;
 use tracing::{debug, error, info};
 
-use sp1_vector_primitives::Timeout;
+use services::Timeout;
 
 /// The justification type that the Avail Subxt client returns for justifications. Needs a custom
 /// deserializer, so we can't use the equivalent `GrandpaJustification` type.
