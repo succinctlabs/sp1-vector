@@ -256,10 +256,7 @@ impl RpcDataFetcher {
                 .collect();
 
             // Await all futures concurrently
-            let headers_batch: Vec<Header> = join_all(header_futures)
-                .await
-                .into_iter()
-                .collect::<Vec<_>>();
+            let headers_batch: Vec<Header> = join_all(header_futures).await;
 
             headers.extend_from_slice(&headers_batch);
             curr_block += MAX_CONCURRENT_WS_REQUESTS as u32;

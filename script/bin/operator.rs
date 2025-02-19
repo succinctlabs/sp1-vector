@@ -255,7 +255,7 @@ where
 
         // Find the block to step to. If no block is returned, either 1) there is no block satisfying
         // the conditions that is available to step to or 2) something has gone wrong with the indexer.
-        let block_to_step_to = self
+        let maybe_block_to_step_to = self
             .find_block_to_step_to(
                 ideal_block_interval,
                 header_range_contract_data.header_range_commitment_tree_size,
@@ -265,9 +265,9 @@ where
             )
             .await;
 
-        info!("block_to_step_to: {:?}", block_to_step_to);
+        info!("maybe_block_to_step_to: {:?}", maybe_block_to_step_to);
 
-        if let Some(block_to_step_to) = block_to_step_to {
+        if let Some(block_to_step_to) = maybe_block_to_step_to {
             return Ok(Some(HeaderRangeRequestData {
                 trusted_block: header_range_contract_data.vectorx_latest_block,
                 target_block: block_to_step_to,
@@ -558,23 +558,21 @@ where
                     chain_ids, header_range_data
                 );
 
-                // All contract instances will produce the same calldata.
-                // And the `chain_ids` vector should have non-zero length.
-                let contract = self
-                    .contracts
-                    .get(&chain_ids[0])
-                    .expect("No contract for chain id");
-
-                let tx = contract
-                    .commitHeaderRange(proof.bytes().into(), proof.public_values.to_vec().into())
-                    .into_transaction_request();
-
                 // Relay the transaction to all chains.
                 let tx_hash_futs: Vec<_> = chain_ids
                     .into_iter()
                     .map(|chain_id| {
-                        // `send_transaction` takes ownership of the transaction.
-                        let tx = tx.clone();
+                        let contract = self
+                            .contracts
+                            .get(&chain_id)
+                            .expect("No contract for chain id");
+
+                        let tx = contract
+                            .commitHeaderRange(
+                                proof.bytes().into(),
+                                proof.public_values.to_vec().into(),
+                            )
+                            .into_transaction_request();
 
                         async move {
                             match self
@@ -678,23 +676,18 @@ where
                     next_auth_id, chain_ids
                 );
 
-                // All contract instances will produce the same calldata.
-                // The vector should have non-zero length.
-                let contract = self
-                    .contracts
-                    .get(&chain_ids[0])
-                    .expect("No contract for chain id");
-
-                let tx = contract
-                    .rotate(proof.bytes().into(), proof.public_values.to_vec().into())
-                    .into_transaction_request();
-
                 // Relay the transaction to all chains.
                 let tx_hash_futs: Vec<_> = chain_ids
                     .into_iter()
                     .map(|chain_id| {
-                        // `send_transaction` takes ownership of the transaction.
-                        let tx = tx.clone();
+                        let contract = self
+                            .contracts
+                            .get(&chain_id)
+                            .expect("No contract for chain id");
+
+                        let tx = contract
+                            .rotate(proof.bytes().into(), proof.public_values.to_vec().into())
+                            .into_transaction_request();
 
                         async move {
                             match self
