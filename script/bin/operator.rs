@@ -218,6 +218,10 @@ where
         ideal_block_interval: u32,
     ) -> Result<Option<HeaderRangeRequestData>> {
         let header_range_contract_data = self.get_contract_data_for_header_range(chain_id).await?;
+        debug!(
+            "header_range_contract_data: {:?}",
+            header_range_contract_data
+        );
 
         // The current authority set id is the authority set id of the block before the current block.
         let current_authority_set_id = self
@@ -334,6 +338,7 @@ where
         if last_justified_block != 0
             && last_justified_block <= vectorx_current_block + header_range_commitment_tree_size
         {
+            debug!("last_justified_block: {}", last_justified_block);
             return Some(last_justified_block);
         }
 
@@ -352,6 +357,8 @@ where
         // ideal_block_interval.
         let mut block_to_step_to =
             max_valid_block_to_step_to - (max_valid_block_to_step_to % ideal_block_interval);
+
+        debug!("Block to step to: {}", block_to_step_to);
 
         // If block_to_step_to is <= to the current block, return None.
         if block_to_step_to <= vectorx_current_block {
