@@ -29,6 +29,8 @@ use sp1_vector_primitives::Timeout;
 use sp1_vectorx_script::relay::{self};
 use sp1_vectorx_script::SP1_VECTOR_ELF;
 
+use config::{ChainConfig, SignerMode};
+
 ////////////////////////////////////////////////////////////
 // Constants
 ////////////////////////////////////////////////////////////
@@ -77,7 +79,7 @@ type SP1VectorInstance<P, N> = SP1Vector::SP1VectorInstance<(), P, N>;
 struct SP1VectorOperator<P, N> {
     pk: Arc<SP1ProvingKey>,
     vk: SP1VerifyingKey,
-    use_kms_relayer: bool,
+    signer_mode: SignerMode,
     tree_size: u32,
     fetcher: RpcDataFetcher,
     prover: NetworkProver,
@@ -107,7 +109,7 @@ where
     P: Provider<N>,
     N: Network,
 {
-    async fn new(use_kms_relayer: bool) -> Self {
+    async fn new(signer_mode: SignerMode) -> Self {
         dotenv::dotenv().ok();
 
         let prover = ProverClient::builder().network().build();
@@ -117,7 +119,7 @@ where
             fetcher: RpcDataFetcher::new().await,
             pk: Arc::new(pk),
             vk,
-            use_kms_relayer,
+            signer_mode,
             prover,
             contracts: HashMap::new(),
             tree_size: 0,
@@ -750,7 +752,7 @@ where
     async fn relay_tx(&self, chain_id: u64, tx: N::TransactionRequest) -> Result<B256> {
         debug!("Relaying transaction to chain {}", chain_id);
 
-        if self.use_kms_relayer {
+        if matches!(self.signer_mode, SignerMode::KMS) {
             relay::relay_with_kms(
                 &relay::KMSRelayRequest {
                     chain_id,
@@ -855,7 +857,6 @@ where
                     }
                 },
                 _ = tokio::time::sleep(Duration::from_secs(LOOP_TIMEOUT_MINS * 60)) => {
-                    // If this branch is hit, its effectiely a timeout.
                     continue;
                 }
             }
@@ -904,24 +905,24 @@ async fn main() {
         )
         .init();
 
-    let use_kms_relayer = env::var("USE_KMS_RELAYER")
+    let signer_mode = env::var("SIGNER_MODE")
         .map(|v| v.parse().unwrap())
-        .unwrap_or(false);
+        .unwrap_or(SignerMode::Local);
 
     let maybe_private_key: Option<PrivateKeySigner> = env::var("PRIVATE_KEY")
         .ok()
         .map(|s| s.parse().expect("Failed to parse PRIVATE_KEY"));
 
-    if !use_kms_relayer && maybe_private_key.is_none() {
+    if matches!(signer_mode, SignerMode::Local) && maybe_private_key.is_none() {
         panic!("PRIVATE_KEY must be set if USE_KMS_RELAYER is false");
     }
 
-    let config = config::ChainConfig::fetch().expect("Failed to fetch chain config");
+    let config = ChainConfig::fetch().expect("Failed to fetch chain config");
     debug!("config: {:?}", config);
 
     let signer = maybe_signer::MaybeWallet::new(maybe_private_key.map(EthereumWallet::new));
 
-    let mut operator = SP1VectorOperator::new(use_kms_relayer).await;
+    let mut operator = SP1VectorOperator::new(signer_mode).await;
 
     for c in config {
         let provider = ProviderBuilder::new()
@@ -996,7 +997,25 @@ mod maybe_signer {
 mod config {
     use alloy::primitives::Address;
     use anyhow::{Context, Result};
-    use std::env;
+    use std::{env, str::FromStr};
+
+    #[derive(Debug)]
+    pub enum SignerMode {
+        KMS,
+        Local,
+    }
+
+    impl FromStr for SignerMode {
+        type Err = anyhow::Error;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            Ok(match s {
+                "kms" => Self::KMS,
+                "local" => Self::Local,
+                _ => return Err(anyhow::anyhow!("Invalid signer mode: {}", s)),
+            })
+        }
+    }
 
     #[derive(Debug, serde::Deserialize)]
     pub struct ChainConfig {
