@@ -12,7 +12,7 @@ use std::env;
 use subxt::backend::rpc::RpcSubscription;
 
 use crate::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification};
-use alloy_primitives::{B256, B512};
+use alloy::primitives::{B256, B512};
 use avail_subxt::avail_client::AvailClient;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
@@ -21,6 +21,10 @@ use codec::{Compact, Decode, Encode};
 use futures::future::join_all;
 use sp_core::ed25519;
 use subxt::config::Header as SubxtHeader;
+
+/// In order to avoid errors from the RPC client, tasks should coordinate via this mutex to coordinate
+/// large amounts of concurrent requests.
+static CONCURRENCY_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// An RPC data fetcher for fetching data for VectorX. The vectorx_query_url is only necessary when
 /// querying justifications.
@@ -31,7 +35,7 @@ pub struct RpcDataFetcher {
 }
 
 /// Data for the header range request.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HeaderRangeRequestData {
     pub trusted_block: u32,
     pub target_block: u32,
@@ -118,7 +122,8 @@ impl RpcDataFetcher {
         let trusted_header = self
             .get_header(header_range_request_data.trusted_block)
             .await;
-        let trusted_header_hash: alloy_primitives::FixedBytes<32> =
+
+        let trusted_header_hash: alloy::primitives::FixedBytes<32> =
             B256::from_slice(&trusted_header.hash().0);
 
         let num_headers =
@@ -135,6 +140,12 @@ impl RpcDataFetcher {
             // NOTE: DANGEROUS. ONLY USED IN TESTING. IN PROD, FETCH FROM CONTRACT.
             merkle_tree_size = get_merkle_tree_size(num_headers);
         }
+
+        tracing::debug!(
+            "Getting block headers range from {} to {}",
+            header_range_request_data.trusted_block,
+            header_range_request_data.target_block
+        );
 
         let headers = self
             .get_block_headers_range(
@@ -229,6 +240,10 @@ impl RpcDataFetcher {
         // Fetch the headers in batches of MAX_CONCURRENT_WS_REQUESTS. The WS connection will error if there
         // are too many concurrent requests with Rpc(ClientError(MaxSlotsExceeded)).
         const MAX_CONCURRENT_WS_REQUESTS: usize = 200;
+
+        // Take the guard to coordinate concurrent requests.
+        let _guard = CONCURRENCY_MUTEX.lock().await;
+
         let mut headers = Vec::new();
         let mut curr_block = start_block_number;
         while curr_block <= end_block_number {
@@ -241,10 +256,7 @@ impl RpcDataFetcher {
                 .collect();
 
             // Await all futures concurrently
-            let headers_batch: Vec<Header> = join_all(header_futures)
-                .await
-                .into_iter()
-                .collect::<Vec<_>>();
+            let headers_batch: Vec<Header> = join_all(header_futures).await;
 
             headers.extend_from_slice(&headers_batch);
             curr_block += MAX_CONCURRENT_WS_REQUESTS as u32;

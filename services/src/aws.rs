@@ -2,9 +2,9 @@ use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 
 use anyhow::Result;
-use log::info;
 use serde_json::{from_str, to_string};
 use std::collections::HashMap;
+use tracing::info;
 
 use crate::types::GrandpaJustification;
 

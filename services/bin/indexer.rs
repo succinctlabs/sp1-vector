@@ -1,7 +1,6 @@
 use avail_subxt::primitives::Header;
 use avail_subxt::RpcParams;
 use codec::Decode;
-use log::{debug, error, info};
 use serde::de::Error;
 use serde::Deserialize;
 use services::aws::AWSClient;
@@ -9,8 +8,9 @@ use services::input::RpcDataFetcher;
 use services::types::{Commit, GrandpaJustification};
 use sp_core::bytes;
 use subxt::backend::rpc::RpcSubscription;
+use tracing::{debug, error, info};
 
-use timeout::Timeout;
+use services::Timeout;
 
 /// The justification type that the Avail Subxt client returns for justifications. Needs a custom
 /// deserializer, so we can't use the equivalent `GrandpaJustification` type.
@@ -139,20 +139,4 @@ pub async fn main() {
     env_logger::init();
 
     listen_for_justifications().await;
-}
-
-mod timeout {
-    use std::future::Future;
-    use std::time::Duration;
-    use tokio::time::{timeout, Timeout as TimeoutFuture};
-
-    pub trait Timeout: Sized {
-        fn timeout(self, duration: Duration) -> TimeoutFuture<Self>;
-    }
-
-    impl<T: Future> Timeout for T {
-        fn timeout(self, duration: Duration) -> TimeoutFuture<Self> {
-            timeout(duration, self)
-        }
-    }
 }

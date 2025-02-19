@@ -2,13 +2,14 @@ use std::env;
 use std::str::FromStr;
 use std::time::Duration;
 
+use alloy::network::Network;
 use alloy::primitives::B256;
-use alloy::providers::{Provider, RootProvider};
-use alloy::transports::http::{Client, Http};
+use alloy::providers::Provider;
+use alloy::transports::http::Client;
 use anyhow::Result;
-use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tracing::info;
 
 /// Get the gas limit associated with the chain id. Note: These values have been found through
 /// trial and error and can be configured.
@@ -22,7 +23,11 @@ pub fn get_gas_limit(chain_id: u64) -> u64 {
 
 /// Get the gas fee cap associated with the chain id, using the provider to get the gas price. Note:
 /// These values have been found through trial and error and can be configured.
-pub async fn get_fee_cap(chain_id: u64, provider: &RootProvider<Http<Client>>) -> u128 {
+pub async fn get_fee_cap<P, N>(chain_id: u64, provider: &P) -> u128
+where
+    P: Provider<N>,
+    N: Network,
+{
     // Base percentage multiplier for the gas fee.
     let mut multiplier = 20;
 
@@ -82,7 +87,7 @@ pub async fn relay_with_kms(args: &KMSRelayRequest, num_retries: u32) -> Result<
                 let error_message = response
                     .message
                     .expect("KMS request always returns a message");
-                log::warn!("KMS relay attempt {} failed: {}", attempt, error_message);
+                tracing::warn!("KMS relay attempt {} failed: {}", attempt, error_message);
                 if attempt == num_retries {
                     return Err(anyhow::anyhow!(
                         "Failed to relay transaction: {}",
