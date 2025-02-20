@@ -852,6 +852,7 @@ where
                         error!("Error during `run_once`: {:?}", e);
                         // Sleep for less time if theres an error.
                         tokio::time::sleep(error_interval).await;
+                        continue;
                     }
                 },
                 _ = tokio::time::sleep(Duration::from_secs(LOOP_TIMEOUT_MINS * 60)) => {
