@@ -6,7 +6,7 @@ import { ApiPromise, initialize, disconnect } from 'avail-js-sdk';
 import { getChainInfo, queryLogs } from '@/app/utils/shared';
 import { VECTORX_DATA_COMMITMENT_EVENT } from '@/app/utils/abi';
 import { AbiEvent } from 'abitype';
-import { CHAIN_TO_WS_ENDPOINT } from '@/app/utils/avail';
+import { CHAIN_TO_WS_ENDPOINT, getBlockRangeAvail } from '@/app/utils/avail';
 
 type DataCommitmentRange = {
     startBlockNumber: number;
@@ -77,21 +77,13 @@ const fetchDataRootsForRange = async (
     chainName: string
 ): Promise<Uint8Array[]> => {
     const api = await initialize(CHAIN_TO_WS_ENDPOINT.get(chainName.toLowerCase()) as string);
-    const MAX_CONCURRENT_WS_REQUESTS = 100;
 
-    let currBlock = startBlock;
-    let dataRoots: Uint8Array[] = [];
-    while (currBlock < endBlock) {
-        const rangeStartBlock = currBlock;
-        const rangeEndBlock = Math.min(currBlock + MAX_CONCURRENT_WS_REQUESTS, endBlock);
-        const blockRange = Array.from(
-            { length: rangeEndBlock - rangeStartBlock },
-            (_, i) => rangeStartBlock + i
-        );
-        const rangeDataRoots = await Promise.all(blockRange.map((x) => fetchDataRoot(api, x)));
-        dataRoots.push(...rangeDataRoots);
-        currBlock = rangeEndBlock;
-    }
+    const blockNumbers = Array.from(
+        { length: endBlock - startBlock },
+        (_, i) => startBlock + i
+    );
+
+    const dataRoots = await Promise.all(blockNumbers.map(x => fetchDataRoot(api, x)));
     return dataRoots;
 };
 
@@ -371,6 +363,21 @@ export async function GET(req: NextRequest) {
 
     console.log('Requested block: ' + requestedBlock);
 
+    let blockRange = await getBlockRangeAvail(addressUint8, ethereumChainId);
+    if (blockRange === undefined) {
+        return NextResponse.json({
+            success: false,
+            error: 'Getting the block range covered by the VectorX contract failed!'
+        });
+    }
+
+    if (requestedBlock < blockRange.start || requestedBlock > blockRange.end) {
+        return NextResponse.json({
+            success: false,
+            error: `Requested block ${requestedBlock} is not in the range of blocks [${blockRange.start}, ${blockRange.end}] contained in the VectorX contract.`
+        });
+    }
+
     try {
         let promises = [
             getBlockHash(requestedBlock, chainName!),
@@ -402,9 +409,6 @@ export async function GET(req: NextRequest) {
             const additionalRoots = new Array(commitmentTreeSize - dataRoots.length).fill(new Uint8Array(32));
             dataRoots = dataRoots.concat(additionalRoots);
         }
-
-        // Compute the data commitment hash using dataRoots.
-        let expectedDataCommitment = computeDataCommitment(dataRoots, commitmentTreeSize);
 
         // Get the merkle branch for the requested block number by computing the Merkle tree branch
         // of the tree constructed from the data roots.
