@@ -77,10 +77,10 @@ sol! {
 type SP1VectorInstance<P, N> = SP1Vector::SP1VectorInstance<(), P, N>;
 
 struct SP1VectorOperator<P, N> {
-    pk: Arc<SP1ProvingKey>,
+    pk: SP1ProvingKey,
     vk: SP1VerifyingKey,
     signer_mode: SignerMode,
-    tree_size: u32,
+    tree_size: Option<u32>,
     fetcher: RpcDataFetcher,
     prover: NetworkProver,
     contracts: HashMap<u64, SP1VectorInstance<P, N>>,
@@ -117,12 +117,12 @@ where
 
         Self {
             fetcher: RpcDataFetcher::new().await,
-            pk: Arc::new(pk),
+            pk,
             vk,
             signer_mode,
             prover,
             contracts: HashMap::new(),
-            tree_size: 0,
+            tree_size: None,
         }
     }
 
@@ -146,12 +146,14 @@ where
             .expect("Failed to get chain id");
 
         // Register the first tree size.
-        if self.tree_size == 0 {
-            self.tree_size = tree_size;
-        } else if self.tree_size != tree_size {
+        if self.tree_size.is_none() {
+            self.tree_size = Some(tree_size);
+        } else if self.tree_size.unwrap() != tree_size {
             panic!(
                 "Tree size mismatch! Expected {}, got {} for chain id {}",
-                self.tree_size, tree_size, chain_id
+                self.tree_size.unwrap(),
+                tree_size,
+                chain_id
             );
         }
 
@@ -265,7 +267,7 @@ where
             )
             .await;
 
-        info!("maybe_block_to_step_to: {:?}", maybe_block_to_step_to);
+        info!("Target Block: {:?}", maybe_block_to_step_to);
 
         if let Some(block_to_step_to) = maybe_block_to_step_to {
             return Ok(Some(HeaderRangeRequestData {
@@ -550,7 +552,10 @@ where
         let results = join_all(header_range_data_to_chain_id.into_iter().map(
             |(header_range_data, chain_ids)| async move {
                 let proof = self
-                    .request_header_range(self.tree_size, header_range_data)
+                    .request_header_range(
+                        self.tree_size.expect("Tree size not set"),
+                        header_range_data,
+                    )
                     .await?;
 
                 info!(
