@@ -916,7 +916,7 @@ async fn run_with_signer(config: Vec<ChainConfig>) {
     for c in config {
         let provider = ProviderBuilder::new()
             .wallet(signer.clone())
-            .connect_http(c.rpc_url.parse().expect("Failed to parse RPC URL"));
+            .on_http(c.rpc_url.parse().expect("Failed to parse RPC URL"));
 
         operator = operator.with_chain(provider, c.vector_address).await;
     }
@@ -928,8 +928,8 @@ async fn run_with_kms(config: Vec<ChainConfig>) {
     let mut operator = SP1VectorOperator::new(SignerMode::Kms).await;
 
     for c in config {
-        let provider = ProviderBuilder::new()
-            .connect_http(c.rpc_url.parse().expect("Failed to parse RPC URL"));
+        let provider =
+            ProviderBuilder::new().on_http(c.rpc_url.parse().expect("Failed to parse RPC URL"));
 
         operator = operator.with_chain(provider, c.vector_address).await;
     }
