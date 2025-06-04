@@ -22,7 +22,7 @@ import {BaseScript} from "./Base.s.sol";
 // - SP1_VECTOR_PROGRAM_VKEY
 // - CREATE2_SALT
 // - GUARDIAN_ADDRESS
-// - SP1_VERIFIER_ADDRESS
+// - SP1_TEE_PLONK_VERIFIER_ADDRESS
 
 contract DeployScript is BaseScript {
     using stdJson for string;
@@ -47,7 +47,7 @@ contract DeployScript is BaseScript {
         address guardian = vm.envOr("GUARDIAN_ADDRESS", msg.sender);
 
         ISP1Verifier verifier =
-            ISP1Verifier(vm.envOr("SP1_VERIFIER_ADDRESS", 0x3B6041173B80E77f038f3F2C0f9744f04837185e));
+            ISP1Verifier(vm.envOr("SP1_TEE_PLONK_VERIFIER_ADDRESS", 0x857364919fD97a1aF7d9C5E8F905C7d222af3D02));
         SP1Vector sp1VectorImpl = new SP1Vector();
         // ERC1967Proxy proxy = new ERC1967Proxy{salt: vm.envBytes32("CREATE2_SALT")}(address(sp1VectorImpl), "");
         ERC1967Proxy proxy = new ERC1967Proxy(address(sp1VectorImpl), "");
