@@ -31,7 +31,7 @@ itertools = "0.10.5"
 chrono = "0.4.39"
 
 # sp1
-sp1-sdk = "=5.0.0"
+sp1-sdk = "5.0.0"
 sp1-build = "5.0.0"
 sp1-zkvm = "5.0.0"
 
