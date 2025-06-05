@@ -456,6 +456,7 @@ where
         self.prover
             .prove(&self.pk, &stdin)
             .strategy(FulfillmentStrategy::Reserved)
+            .cycle_limit(u64::MAX)
             .skip_simulation(true)
             .plonk()
             .timeout(Duration::from_secs(PROOF_TIMEOUT_SECS))
