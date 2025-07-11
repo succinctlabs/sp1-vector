@@ -56,56 +56,61 @@ impl RpcDataFetcher {
     }
 
     /// Gets a justification from the vectorx-query service, which reads the data from the AWS DB.
+    /// Returns a parsed GrandpaJustification struct on success.
+    /// 
+    /// # Arguments
+    /// * `block_number` - The block number for which the justification is requested.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - VECTORX_QUERY_URL is not set,
+    /// - The HTTP request fails,
+    /// - The response JSON is missing expected fields,
+    /// - The justification cannot be deserialized.
     pub async fn get_justification(&self, block_number: u32) -> Result<GrandpaJustification> {
-        if self.vectorx_query_url.is_none() {
-            return Err(anyhow::anyhow!("VECTORX_QUERY_URL must be set"));
-        }
+        // Ensure the vectorx_query_url is set, otherwise return an error.
+        let vectorx_query_url = self.vectorx_query_url.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("VECTORX_QUERY_URL must be set"))?;
 
-        let base_justification_query_url = format!(
-            "{}/api/justification",
-            self.vectorx_query_url.as_ref().unwrap()
-        );
+        // Construct the base URL for the justification API endpoint.
+        let base_justification_query_url = format!("{}/api/justification", vectorx_query_url);
 
+        // Build the full request URL with chain ID and block number as query parameters.
         let request_url = format!(
             "{}?availChainId={}&blockNumber={}",
             base_justification_query_url, self.avail_chain_id, block_number
         );
 
-        let response = reqwest::get(request_url).await?;
+        // Send a GET request to the justification service.
+        let response = reqwest::get(&request_url).await?;
+        // Parse the response body as JSON.
         let json_response = response.json::<serde_json::Value>().await?;
 
-        // If the service does not have a justification associated with the block, return an error.
-        // The response will have the following form:
-        // {
-        //     "success": false
-        //     "error": "No justification found."
-        // }
-        let is_success = json_response.get("success").unwrap().as_bool().unwrap();
+        // Safely check the "success" field in the response.
+        // If missing or not a boolean, return an error.
+        let is_success = json_response.get("success")
+            .and_then(|v| v.as_bool())
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid 'success' field in justification response"))?;
+        // If the request was not successful, extract the error message or use a default one.
         if !is_success {
-            return Err(anyhow::anyhow!(
-                "No justification found for the specified block number."
-            ));
+            let error_msg = json_response.get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("No justification found for the specified block number.");
+            return Err(anyhow::anyhow!(error_msg));
         }
 
-        // If the service does have a justification, it should have the following form:
-        // {
-        //     "success": true,
-        //     "justification": {
-        //         "S": "<justification as string>"
-        //     }
-        // }
+        // Safely extract the justification string from the response.
+        // The expected structure is: { "justification": { "S": "<json string>" } }
         let justification_str = json_response
             .get("justification")
-            .ok_or_else(|| anyhow::anyhow!("Justification field missing"))
-            .expect("Justification field should be present")
-            .get("S")
-            .ok_or_else(|| anyhow::anyhow!("Justification field should be a string"))
-            .expect("Justification field should be a string")
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Justification field should be a string"))
-            .expect("Justification field should be a string");
+            .and_then(|j| j.get("S"))
+            .and_then(|s| s.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Justification field missing or not a string"))?;
+
+        // Deserialize the justification string into a GrandpaJustification struct.
         let justification_data: GrandpaJustification =
-            serde_json::from_str(justification_str).expect("Couldn't deserialize!");
+            serde_json::from_str(justification_str)
+                .map_err(|e| anyhow::anyhow!("Couldn't deserialize justification: {}", e))?;
 
         Ok(justification_data)
     }
