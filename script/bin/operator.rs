@@ -202,6 +202,7 @@ where
 
         self.prover
             .prove(&self.pk, &stdin)
+            .tee_2fa()
             .strategy(FulfillmentStrategy::Reserved)
             .skip_simulation(true)
             .plonk()
