@@ -558,48 +558,36 @@ where
                     chain_ids, header_range_data
                 );
 
-                // // Relay the transaction to all chains.
-                // let tx_hash_futs: Vec<_> = chain_ids
-                //     .into_iter()
-                //     .map(|chain_id| {
-                //         let contract = self
-                //             .contracts
-                //             .get(&chain_id)
-                //             .expect("No contract for chain id");
+                // Relay the transaction to all chains.
+                let tx_hash_futs: Vec<_> = chain_ids
+                    .into_iter()
+                    .map(|chain_id| {
+                        let contract = self
+                            .contracts
+                            .get(&chain_id)
+                            .expect("No contract for chain id");
 
-                //         let tx = contract
-                //             .commitHeaderRange(
-                //                 proof.bytes().into(),
-                //                 proof.public_values.to_vec().into(),
-                //             )
-                //             .into_transaction_request();
+                        let tx = contract
+                            .commitHeaderRange(
+                                proof.bytes().into(),
+                                proof.public_values.to_vec().into(),
+                            )
+                            .into_transaction_request();
 
-                //         async move {
-                //             match self
-                //                 .relay_tx(chain_id, tx)
-                //                 .await
-                //                 .context(format!("Relaying proof for chain {chain_id} failed"))
-                //             {
-                //                 Ok(tx_hash) => Ok((chain_id, tx_hash)),
-                //                 Err(e) => Err(e),
-                //             }
-                //         }
-                //     })
-                //     .collect();
+                        async move {
+                            match self
+                                .relay_tx(chain_id, tx)
+                                .await
+                                .context(format!("Relaying proof for chain {chain_id} failed"))
+                            {
+                                Ok(tx_hash) => Ok((chain_id, tx_hash)),
+                                Err(e) => Err(e),
+                            }
+                        }
+                    })
+                    .collect();
 
-                Result::<_, anyhow::Error>::Ok(
-                    join_all(vec![]
-                        as Vec<
-                            std::pin::Pin<
-                                Box<
-                                    dyn std::future::Future<
-                                            Output = Result<(u64, B256), anyhow::Error>,
-                                        > + Send,
-                                >,
-                            >,
-                        >)
-                    .await,
-                )
+                Result::<_, anyhow::Error>::Ok(join_all(tx_hash_futs).await)
             },
         ))
         .await;
@@ -688,45 +676,33 @@ where
                     next_auth_id, chain_ids
                 );
 
-                // // Relay the transaction to all chains.
-                // let tx_hash_futs: Vec<_> = chain_ids
-                //     .into_iter()
-                //     .map(|chain_id| {
-                //         let contract = self
-                //             .contracts
-                //             .get(&chain_id)
-                //             .expect("No contract for chain id");
+                // Relay the transaction to all chains.
+                let tx_hash_futs: Vec<_> = chain_ids
+                    .into_iter()
+                    .map(|chain_id| {
+                        let contract = self
+                            .contracts
+                            .get(&chain_id)
+                            .expect("No contract for chain id");
 
-                //         let tx = contract
-                //             .rotate(proof.bytes().into(), proof.public_values.to_vec().into())
-                //             .into_transaction_request();
+                        let tx = contract
+                            .rotate(proof.bytes().into(), proof.public_values.to_vec().into())
+                            .into_transaction_request();
 
-                //         async move {
-                //             match self
-                //                 .relay_tx(chain_id, tx)
-                //                 .await
-                //                 .context(format!("Relaying proof for chain {chain_id} failed"))
-                //             {
-                //                 Ok(tx_hash) => Ok((chain_id, tx_hash)),
-                //                 Err(e) => Err(e),
-                //             }
-                //         }
-                //     })
-                //     .collect();
+                        async move {
+                            match self
+                                .relay_tx(chain_id, tx)
+                                .await
+                                .context(format!("Relaying proof for chain {chain_id} failed"))
+                            {
+                                Ok(tx_hash) => Ok((chain_id, tx_hash)),
+                                Err(e) => Err(e),
+                            }
+                        }
+                    })
+                    .collect();
 
-                Result::<_, anyhow::Error>::Ok(
-                    join_all(vec![]
-                        as Vec<
-                            std::pin::Pin<
-                                Box<
-                                    dyn std::future::Future<
-                                            Output = Result<(u64, B256), anyhow::Error>,
-                                        > + Send,
-                                >,
-                            >,
-                        >)
-                    .await,
-                )
+                Result::<_, anyhow::Error>::Ok(join_all(tx_hash_futs).await)
             },
         ))
         .await;
