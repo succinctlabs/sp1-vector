@@ -202,8 +202,11 @@ where
 
         self.prover
             .prove(&self.pk, &stdin)
-            .strategy(FulfillmentStrategy::Reserved)
+            .strategy(FulfillmentStrategy::Auction)
             .skip_simulation(true)
+            .cycle_limit(1_000_000_000)
+            .gas_limit(500_000_000)
+            .min_auction_period(10)
             .plonk()
             .timeout(Duration::from_secs(PROOF_TIMEOUT_SECS))
             .run_async()
@@ -455,8 +458,11 @@ where
 
         self.prover
             .prove(&self.pk, &stdin)
-            .strategy(FulfillmentStrategy::Reserved)
+            .strategy(FulfillmentStrategy::Auction)
             .skip_simulation(true)
+            .cycle_limit(1_000_000_000)
+            .gas_limit(500_000_000)
+            .min_auction_period(10)
             .plonk()
             .timeout(Duration::from_secs(PROOF_TIMEOUT_SECS))
             .run_async()
