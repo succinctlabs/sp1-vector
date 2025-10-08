@@ -4,10 +4,17 @@ resolver = "2"
 
 [workspace.dependencies]
 # Avail
+# avail-subxt = { git = "https://github.com/availproject/avail.git", tag = "v2.3.0.0" }
+# sp-core = { version = "2.0.0-alpha.5", package = "sp-core" }
 avail-subxt = { git = "https://github.com/availproject/avail.git", tag = "v2.2.5.1" }
 sp-core = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-10", default-features = false }
 subxt = "0.34"
 codec = { package = "parity-scale-codec", version = "3", default-features = false }
+
+bytes = { version = "1.10.1" }
+cfg-if = { version = "1.0.3" }
+arrayvec = { version = "0.7.6" }
+getrandom = { version = "0.3.3" }
 
 # Cryptography
 ed25519-consensus = { version = "2.1", default-features = false }
@@ -15,7 +22,7 @@ sha2 = { version = "0.10.8", default-features = false }
 blake2 = "0.10.6"
 
 # Alloy
-alloy = { version = "0.14", features = ["full"] }
+alloy = { version = "1.0.35", features = ["full"] }
 
 # Common
 anyhow = "1.0.68"
@@ -31,13 +38,12 @@ itertools = "0.10.5"
 chrono = "0.4.39"
 
 # sp1
-sp1-sdk = { version = "5.2.1", default-features = false, features = [
-    "network",
-] }
-sp1-build = "5.0.0"
-sp1-zkvm = "5.0.0"
+sp1-sdk = { git = "https://github.com/succinctlabs/sp1-wip.git", branch = "multilinear_v6" }
+sp1-build = { git = "https://github.com/succinctlabs/sp1-wip.git", branch = "multilinear_v6" }
+sp1-zkvm = { package = "sp1-zkvm", git = "https://github.com/succinctlabs/sp1-wip.git", branch = "multilinear_v6" }
 
-reqwest = { version = "0.11.20", features = ["json"] }
+reqwest = { version = "0.12.12", features = ["json"] }
+# reqwest = { version = "0.11.20", features = ["json"] }
 futures = "0.3.30"
 
 aws-config = { version = "1.5.1", features = ["behavior-version-latest"] }
